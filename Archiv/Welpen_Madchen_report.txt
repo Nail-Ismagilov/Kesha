@@ -1,0 +1,13 @@
+GEBLIEBEN:
+    * Strelka
+    * Molli
+    * Alpina
+    * Hasja
+    * Malika
+    * Omma
+    * Ornella
+    * Ornuma
+
+ABGEHOLT:
+
+NEUE:

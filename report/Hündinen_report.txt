@@ -1,0 +1,36 @@
+GEBLIEBEN:
+    * Tinga
+    * Meyla
+    * Sila
+    * Peppa
+    * Blacky
+    * Ella
+    * Runa
+    * Mimi
+    * Misha
+    * Abbis
+    * Nora
+    * Yumi
+    * Ari
+    * Tosja
+    * Surika
+    * Alpa
+    * Lima
+    * Roxy
+    * Birma
+    * Senta
+    * Miki
+    * Miranda
+
+ABGEHOLT:
+    * Erika
+    * Marusja
+    * Zena
+    * Sofie
+    * Hazel
+    * Tonya
+    * Sadzhi
+    * Chita
+
+NEUE:
+    * Tiffany

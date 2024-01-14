@@ -1,0 +1,34 @@
+GEBLIEBEN:
+    * Anton
+    * Muffin
+    * Goscha
+    * Marty
+    * Delos
+    * Kurt
+    * Bruno
+    * Timo
+    * Benno
+    * Moris
+    * Odi
+    * Lutik
+    * Miroscha
+    * Mandarin
+    * Vegas
+    * Bosfor
+    * Süleyman
+    * Elbrus
+    * Felix
+    * Mario
+    * Lucky
+    * Manu
+    * Enger
+
+ABGEHOLT:
+    * Bim
+    * Sema
+    * Elbrus
+
+NEUE:
+    * Barry
+    * Erman
+    * Cäsar

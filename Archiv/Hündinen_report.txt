@@ -1,0 +1,33 @@
+GEBLIEBEN:
+    * Sofie
+    * Ella
+    * Runa
+    * Tully
+    * Mimi
+    * Sadzhi
+    * Misha
+    * Abbis
+    * Nora
+    * Yumi
+    * Chita
+    * Ari
+    * Tosja
+    * Surika
+    * Alpa
+    * Lima
+    * Roxy
+    * Birma
+    * Senta
+    * Miki
+    * Miranda
+    * Tiffany
+
+ABGEHOLT:
+    * Sofie
+    * Hazel
+    * Tonya
+    * Chita
+
+NEUE:
+    * Marusja
+    * Zena

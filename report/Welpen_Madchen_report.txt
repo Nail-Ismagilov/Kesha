@@ -1,0 +1,10 @@
+GEBLIEBEN:
+    * Strelka
+    * Hasja
+    * Omma
+    * Ornella
+    * Ornuma
+
+ABGEHOLT:
+
+NEUE:

@@ -1,0 +1,83 @@
+GEBLIEBEN:
+    * Peppa
+    * Erika
+    * Blacky
+    * Marusja
+    * Zena
+    * Ella
+    * Runa
+    * Mimi
+    * Sadzhi
+    * Misha
+    * Abbis
+    * Nora
+    * Yumi
+    * Ari
+    * Tosja
+    * Surika
+    * Alpa
+    * Lima
+    * Roxy
+    * Birma
+    * Senta
+    * Miki
+    * Miranda
+    * Tiffany
+    * Tully
+    * Anton
+    * Muffin
+    * Goscha
+    * Cäsar
+    * Marty
+    * Delos
+    * Bim
+    * Kurt
+    * Bruno
+    * Timo
+    * Bali
+    * Benno
+    * Moris
+    * Odi
+    * Sema
+    * Lutik
+    * Miroscha
+    * Mandarin
+    * Vegas
+    * Bosfor
+    * Süleyman
+    * Elbrus
+    * Felix
+    * Mario
+    * Lucky
+    * Manu
+    * Enger
+    * Sokrat
+    * Strelka
+    * Hasja
+    * Omma
+    * Ornella
+    * Ornuma
+    * Alpina
+    * Malika
+    * Molli
+    * Molly
+    * Lucky Junior
+    * Sewa
+    * Robby
+    * Dobby
+    * Kokos
+    * Runi
+
+ABGEHOLT:
+    * Zena
+    * Sofie
+    * Hazel
+    * Tonya
+    * Sadzhi
+    * Chita
+    * Cäsar
+    * Bim
+    * Sema
+    * Lucky Junior
+
+NEUE:
