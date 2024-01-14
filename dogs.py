@@ -120,7 +120,7 @@ class Dog:
         return process
 
     def get_path(self):
-        path = pathlib.Path(__file__).parent.resolve()/"hunde"/self.category/self.name
+        path = f"{pathlib.Path(__file__).parent.resolve()}/hunde/{self.category}/{self.name}"
         return path
     
     def del_path(self, path):
