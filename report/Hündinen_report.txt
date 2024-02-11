@@ -1,16 +1,13 @@
 GEBLIEBEN:
-    * Tinga
     * Meyla
-    * Sila
     * Peppa
+    * Sila
     * Blacky
     * Ella
     * Runa
     * Mimi
     * Misha
-    * Abbis
     * Nora
-    * Yumi
     * Ari
     * Tosja
     * Surika
@@ -23,14 +20,7 @@ GEBLIEBEN:
     * Miranda
 
 ABGEHOLT:
-    * Erika
-    * Marusja
-    * Zena
-    * Sofie
-    * Hazel
-    * Tonya
-    * Sadzhi
-    * Chita
+    * Abbis
+    * Yumi
 
 NEUE:
-    * Tiffany
