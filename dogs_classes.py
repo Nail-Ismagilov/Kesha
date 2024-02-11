@@ -74,9 +74,9 @@ def dogs_still_exist(directory_path, key):
         key (string): subtree
     """
     #  Check if the folder name is not in the list
-    for folder_name in os.listdir(f"{directory_path}/{key}"):
+    for folder_name in os.listdir(f"{directory_path}/hunde/{key}"):
         exist = False
-        folder_path = os.path.join(directory_path, key, folder_name)
+        folder_path = os.path.join(f"{directory_path}/hunde/", key, folder_name)
         if check_keys(folder_name, HAPPY_DOG):
             exist = True
             # print(f"{folder_name} is Happy Dog")
