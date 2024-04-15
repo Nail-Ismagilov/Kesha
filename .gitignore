@@ -1,8 +1,9 @@
+.git/
+./.gitignore
 __pycache__
-report/*
-venv/*
-ENV_DIR
 hunde/Hündinen/*
 hunde/Rüden/*
 hunde/Welpen_Madchen/*
 hunde/Welpen_und_Junghunde/*
+venv/
+ENV_DIR/
