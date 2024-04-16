@@ -33,13 +33,8 @@ class Doglist:
                     leftDogs[dogs].append(dog)
         return leftDogs
 
-existingList = Dogs_from_PC() 
-fromUrl = Dogs_from_URL()
 
-dogList = Doglist(existingList.dog_list(), fromUrl.dog_list())
-
-
-print(existingList.dog_list())
+# print(existingList.dog_list())
 # print(fromUrl.dog_list())
 
 # print(dogList.left_dogs())
