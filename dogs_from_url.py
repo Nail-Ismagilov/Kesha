@@ -10,7 +10,7 @@ class Dogs_from_URL:
         dogs = []
         for pet in pets:
             if pet['spec'] not in REIST_BALD:
-                html_text = requests.get(urls[gender]).text
+                html_text = requests.get(pet['url']).text
                 soup = BeautifulSoup(html_text, 'html.parser')
                 name = get_html_element(soup, NAME_HTML_PART, NAME_HTML_ATTRIBUTE)
                 dogs.append(name)
@@ -29,7 +29,7 @@ class Dogs_from_URL:
         return self.__get_dogs("Welpen_und_Junghunde")
     
     def dog_list(self):
-        self.dogs["Hündin"] = self.__get_hundin()
+        self.dogs["Hündinen"] = self.__get_hundin()
         self.dogs["Rüden"] = self.__get_ruden()
         self.dogs["Welpen_Madchen"] = self.__get_welpen_madchen()
         self.dogs["Welpen_und_Junghunde"] = self.__get_welpen_junghunde()

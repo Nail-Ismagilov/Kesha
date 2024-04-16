@@ -2,9 +2,11 @@ from dogs_from_url import Dogs_from_URL
 from dogs_from_PC import Dogs_from_PC
 
 class Doglist:
-    def __init__(self, existingList, internetList):
-        self.existingList = existingList
-        self.internetList = internetList
+    def __init__(self):
+        self.existingList = Dogs_from_PC().dog_list() 
+        self.internetList = Dogs_from_URL().dog_list()
+            # existingList = Dogs_from_PC() 
+            # fromUrl = Dogs_from_URL()
 
     def happy_dogs (self):
         happyDogs = {}

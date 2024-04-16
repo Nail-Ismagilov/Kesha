@@ -1,11 +1,12 @@
 from dogs import *
 
-def new_dogs():
+def create_new_dogs():
     for gender in urls.keys():
-        for url in urls:
-            dog = Dog(url, gender)
-            if not dog.dog_exist():
-                dog.create_dog()
+        doggies = get_pets_from_url(urls[gender])
+        for dog in doggies:
+            doggy = Dog(dog['url'], gender)
+            if not doggy.dog_exist():
+                doggy.create_dog()
 
 def get_path(gender, name):
     path = f"{pathlib.Path(__file__).parent.resolve()}/hunde/{gender}/{name}"
