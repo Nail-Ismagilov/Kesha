@@ -1,5 +1,4 @@
 GEBLIEBEN:
-    * Strelka
     * Hasja
     * Omma
     * Ornella
@@ -8,3 +7,6 @@ GEBLIEBEN:
 ABGEHOLT:
 
 NEUE:
+    * Niksi
+    * Tawi
+    * Tinga

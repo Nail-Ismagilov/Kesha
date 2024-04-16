@@ -1,13 +1,14 @@
 GEBLIEBEN:
+    * Barry
+    * Erman
     * Anton
     * Muffin
     * Goscha
-    * Marty
+    * Cäsar
     * Delos
     * Kurt
     * Bruno
     * Timo
-    * Benno
     * Moris
     * Odi
     * Lutik
@@ -16,7 +17,6 @@ GEBLIEBEN:
     * Vegas
     * Bosfor
     * Süleyman
-    * Elbrus
     * Felix
     * Mario
     * Lucky
@@ -24,11 +24,6 @@ GEBLIEBEN:
     * Enger
 
 ABGEHOLT:
-    * Bim
-    * Sema
-    * Elbrus
 
 NEUE:
-    * Barry
-    * Erman
-    * Cäsar
+    * Archie
