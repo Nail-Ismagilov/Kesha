@@ -1,58 +1,21 @@
 #!/usr/bin/python
 import os
-import sys
-import requests
-from bs4 import BeautifulSoup 
+from elements_from_url import *
 import re
 import pathlib
 import shutil
 
-vermittlung = {'Hündinen' : 'https://tierschutzverein-kesha.de/vermittlung/huendinnen/',
-               'Rüden' : 'https://tierschutzverein-kesha.de/vermittlung/ruede/',
-               'Welpen_Madchen' : 'https://tierschutzverein-kesha.de/vermittlung/welpen-junghunde/',
-               'Welpen_und_Junghunde' : 'https://tierschutzverein-kesha.de/welpen-junghunde-jungs/'}
+
 PFLEGESTELLE = "*befindet sich auf einer Pflegestelle in Deutschland."
 
-SPEC_HTML_PART      = 'span'
-SPEC_HTML_ATTRIBUTE = {'style':"color: #4b90c9; display: block;"}
-SPEC_HTML_ATTRIBUTE2 = {"style":"color: #4b90c9;"}
-NAME_HTML_PART      = 'h2'
-NAME_HTML_ATTRIBUTE = {'class':"entry-title"}
-
-def get_html_element(html_text, element, attribute):
-    value = ''
-    for a in html_text.findAll(element, attrs = attribute):
-        try:
-            value = a.text
-        except TypeError:
-            value = 'N/A'
-    return value
-
-def get_pets_from_url(url):
-    html_text = requests.get(url).text
-    soup = BeautifulSoup(html_text, 'html.parser')
-    table = soup.find('div', attrs = {'id':'page-content'})  
-    
-    dogs = []
-    for row in table.findAll('blockquote', attrs = {'class':'pets'}):
-        dog = {}
-        try:
-            dog['url'] = row.a['href']
-            dog['spec'] = get_html_element(row, SPEC_HTML_PART, SPEC_HTML_ATTRIBUTE)
-            if dog['spec'] == '':
-                dog['spec'] = get_html_element(row, SPEC_HTML_PART, SPEC_HTML_ATTRIBUTE2)
-        except TypeError:
-            continue
-        dogs.append(dog)
-    return dogs
-
 class Dog:
-    """Main class Dog wit instace url and category(gender)
+    """Main class Dog with instance url and gender
     """
-    def __init__(self, url, category):
+    def __init__(self, url, gender):
         self.url = url
         self.name = self.get_name()
-        self.category = category
+        self.gender = gender
+        # self.existedList = existedList
 
     def create_dog(self):
         self.create_folder(self.get_path())
@@ -111,16 +74,16 @@ class Dog:
     def create_folder(self, path):
         os.makedirs(path) 
 
-    def dog_exist(self, path):
+    def dog_exist(self):
         process = False
-        if os.path.exists(path):
+        if os.path.exists(self.get_path()):
             process = True
         else:
             process = False
         return process
 
     def get_path(self):
-        path = pathlib.Path(__file__).parent.resolve()/"hunde"/self.category/self.name
+        path = f"{pathlib.Path(__file__).parent.resolve()}/hunde/{self.gender}/{self.name}"
         return path
     
     def del_path(self, path):
