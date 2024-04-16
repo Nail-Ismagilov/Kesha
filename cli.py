@@ -13,27 +13,17 @@ dogs_dict = {HUNDINEN: "Hündinen",
              EXIT : "Exit"}
 
 class CLI:
-    def create_dog():
+    def create_menu(self):
         print()
-        print("       /^-^\\")
-        print("      / o o \\")
-        print("     /   Y   \\")
-        print("     V \\ v / V")
-        print("       / - \\" )
-        print("      /    |")
-        print("(    /     |")
-        print(" ===/___) ||")
-        print("vvvvvvvvvvvvvvvvvvvvvvvvvvvv")
-
-    def create_menu():
-        print("============================")
-        print(f"1 - {dogs_dict[HUNDINEN]}\n"
-            f"2 - {dogs_dict[RUDEN]}\n"
-            f"3 - {dogs_dict[WELPEN_RUDEN]}\n"
-            f"4 - {dogs_dict[WELPEN_MADCHEN]}\n"
-            f"5 - {dogs_dict[ALL]}\n"
-            f"{EXIT} - {dogs_dict[EXIT]}")
-        print("============================")
+        print("============================" + "       /^-^\\")
+        print("1 - Hündinen                " + "      / o o \\")
+        print("2 - Rüden                   " + "     /   Y   \\")
+        print("3 - Welpen_und_Junghunde    " + "     V \\ v / V")
+        print("4 - Welpen_Madchen          " + "       / - \\" )
+        print("5 - ALL                     " + "      /    |")
+        print("E - Exit                    " + "(    /     |")
+        print("                            " + " ===/___) ||")
+        print("============================" )
 
     def show_report(reportData):
         for data in reportData.keys():
