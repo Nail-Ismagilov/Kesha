@@ -6,11 +6,11 @@ class Dogs_from_URL:
     dogs = {}
 
     def __get_dogs(self, gender):
-        pets = get_pets_from_url(url[gender])
+        pets = get_pets_from_url(urls[gender])
         dogs = []
         for pet in pets:
             if pet['spec'] not in REIST_BALD:
-                html_text = requests.get(self.url).text
+                html_text = requests.get(urls[gender]).text
                 soup = BeautifulSoup(html_text, 'html.parser')
                 name = get_html_element(soup, NAME_HTML_PART, NAME_HTML_ATTRIBUTE)
                 dogs.append(name)
