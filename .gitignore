@@ -6,3 +6,5 @@ hunde/Rüden/*
 hunde/Welpen_Madchen/*
 hunde/Welpen_und_Junghunde/*
 venv/
+/venv/*
+ENV_DIR
