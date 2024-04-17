@@ -15,14 +15,6 @@ def start():
     # create dogs list
     dogList = Doglist()
 
-    # create folders
-    create_new_dogs()
-
-    # deflete folders
-    for gender in dogList.happy_dogs().keys():
-        for dog in dogList.happy_dogs()[gender]:
-            delete_dog(gender, dog)
-
     # create reports   
     create_report(dogList)
     
@@ -33,6 +25,12 @@ def start():
         cli.create_menu()
         user_choice = input("Select Dog: ")
         if user_choice.upper() != EXIT and int(user_choice) <= len(dogsGender):
-            show_report(dogsGender[int(user_choice)-1])
+            gender = dogsGender[int(user_choice)-1]
+            # create folders
+            create_new_dogs(gender)
+            # deflete folders1
+            for dog in dogList.happy_dogs()[gender]:
+                delete_dog(gender, dog)
+            show_report(gender)
 
 start()
