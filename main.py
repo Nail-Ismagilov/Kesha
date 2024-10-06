@@ -5,7 +5,7 @@ from cli import *
 from manage_folder import *
 from report import *
 
-dogsGender = ["Hündinen", "Rüden", "Welpen_Madchen", "Welpen_und_Junghunde"]
+dogsGender = ["Hündinen", "Rüden", "Welpen_Madchen", "Welpen_und_Junghunde", "Pflegestelle"]
 
 # main loop
 def start():

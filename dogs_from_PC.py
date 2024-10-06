@@ -22,11 +22,15 @@ class Dogs_from_PC:
     def __get_welpen_junghunde(self):
         return self.__get_dogs("Welpen_und_Junghunde")
     
+    def __get_welpen_pflegestelle(self):
+        return self.__get_dogs("Pflegestelle")
+
     def dog_list(self):
         self.dogs["Hündinen"] = self.__get_hundin()
         self.dogs["Rüden"] = self.__get_ruden()
         self.dogs["Welpen_Madchen"] = self.__get_welpen_madchen()
         self.dogs["Welpen_und_Junghunde"] = self.__get_welpen_junghunde()
+        self.dogs["Pflegestelle"] = self.__get_welpen_pflegestelle()
         return self.dogs
 
 

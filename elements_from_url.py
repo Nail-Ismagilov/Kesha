@@ -10,7 +10,8 @@ NAME_HTML_ATTRIBUTE = {'class':"entry-title"}
 urls = {'Hündinen' : 'https://tierschutzverein-kesha.de/vermittlung/huendinnen/',
        'Rüden' : 'https://tierschutzverein-kesha.de/vermittlung/ruede/',
        'Welpen_Madchen' : 'https://tierschutzverein-kesha.de/vermittlung/welpen-junghunde/',
-       'Welpen_und_Junghunde' : 'https://tierschutzverein-kesha.de/welpen-junghunde-jungs/'}
+       'Welpen_und_Junghunde' : 'https://tierschutzverein-kesha.de/welpen-junghunde-jungs/',
+       'Pflegestelle' : 'https://tierschutzverein-kesha.de/vermittlung/hunde-in-pflegestellen-deutschland/'}
 
 def get_pets_from_url(url):
     html_text = requests.get(url).text
