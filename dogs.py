@@ -4,9 +4,18 @@ from elements_from_url import *
 import re
 import pathlib
 import shutil
-
+import random
 
 PFLEGESTELLE = "*befindet sich auf einer Pflegestelle in Deutschland."
+adjectives = {
+    'male': ['Süßer', 'Schöner', 'Lieber'],
+    'female': [ 'Süße', 'Schöne', 'Liebe']
+}
+endings = {
+    'male': ['sucht seine Familie', 'sucht liebevolle Familie','sucht liebevolles Zuhause', 'sucht ein neues Zuhause'],
+    'female': ['sucht ihre Familie', 'sucht liebevolle Familie', 'sucht liebevolles Zuhause', 'sucht ein neues Zuhause']
+}
+        
 
 class Dog:
     """Main class Dog with instance url and gender
@@ -38,8 +47,17 @@ class Dog:
         description = soup.find('div', attrs = {'id':'page-content'}).getText()
         return description
 
+    def get_title(self):
+        is_male = self.gender in ['Rüden', 'Welpen_und_Junghunde']
+        gender_key = 'male' if is_male else 'female'
+        adj = random.choice(adjectives[gender_key])
+        ending = random.choice(endings[gender_key])
+        return f"{adj} {self.name} {ending}"
+
     def set_description(self):
         text_arr = []
+        title = self.get_title()
+        text_arr.append(f"{title}\n\n")  # Add title with double line break
         description = self.get_description()
         text_arr.append(description.split('wird nach positiver Vorkontrolle ')[0])
         self.compose_text(text_arr)
