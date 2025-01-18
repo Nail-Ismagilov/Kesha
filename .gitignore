@@ -8,5 +8,4 @@ hunde/Welpen_und_Junghunde/*
 venv/
 /venv/*
 ENV_DIR
-hunde/*
 report/*
