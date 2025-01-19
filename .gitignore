@@ -9,3 +9,4 @@ venv/
 /venv/*
 ENV_DIR
 report/*
+*.docx
