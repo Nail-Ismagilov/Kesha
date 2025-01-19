@@ -1,9 +1,0 @@
-GEBLIEBEN:
-    * Lucky Junior
-    * Sewa
-    * Runi
-    * Robby
-
-ABGEHOLT:
-
-NEUE:
