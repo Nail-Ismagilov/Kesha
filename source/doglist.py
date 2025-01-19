@@ -1,5 +1,5 @@
-from dogs_from_url import Dogs_from_URL
-from dogs_from_PC import Dogs_from_PC
+from source.dogs_from_url import Dogs_from_URL
+from source.dogs_from_PC import Dogs_from_PC
 
 class Doglist:
     def __init__(self):

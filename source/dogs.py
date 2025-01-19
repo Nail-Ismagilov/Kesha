@@ -1,10 +1,11 @@
 #!/usr/bin/python
 import os
-from elements_from_url import *
+from source.elements_from_url import *
 import re
 import pathlib
 import shutil
 import random
+from source.global_defines import DOGS_PATH    
 
 PFLEGESTELLE = "*befindet sich auf einer Pflegestelle in Deutschland."
 adjectives = {
@@ -68,7 +69,7 @@ class Dog:
             word = re.sub("Name", f"{self.name}", word, flags=re.IGNORECASE)
             text_arr.append(word)
         file.close()
-        composed_text = open(f"{self.get_path()}\{self.name}.txt", "w+", encoding="utf-8")
+        composed_text = open(f"{self.get_path()}/{self.name}.txt", "w+", encoding="utf-8")
         for line in text_arr:
             composed_text.write(line)  
 
@@ -85,7 +86,7 @@ class Dog:
     
     def save_image(self, image_url, counter):
         img_data = requests.get(image_url).content
-        with open(f"{self.get_path()}\{self.name}{counter}.jpg", 'wb') as handler:
+        with open(f"{self.get_path()}/{self.name}{counter}.jpg", 'wb') as handler:
             handler.write(img_data)
         pass
 
@@ -101,7 +102,7 @@ class Dog:
         return process
 
     def get_path(self):
-        path = f"{pathlib.Path(__file__).parent.resolve()}/hunde/{self.gender}/{self.name}"
+        path = f"{DOGS_PATH}/{self.gender}/{self.name}"
         return path
     
     def del_path(self, path):

@@ -1,4 +1,5 @@
-from dogs import *
+from source.dogs import *
+from source.global_defines import DOGS_PATH
 
 def create_new_dogs(gender):
     doggies = get_pets_from_url(urls[gender])
@@ -8,7 +9,7 @@ def create_new_dogs(gender):
             doggy.create_dog()
 
 def get_path(gender, name):
-    path = f"{pathlib.Path(__file__).parent.resolve()}/hunde/{gender}/{name}"
+    path = f"{DOGS_PATH}/{gender}/{name}"
     return path
 
 def del_path(path, name):

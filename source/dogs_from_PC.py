@@ -1,20 +1,14 @@
-from elements_from_url import *
+import os
+import pathlib
+from source.global_defines import DOGS_PATH
 
-REIST_BALD = "*reist bald in sein Zuhause.", "*reist bald in ihr Zuhause."
 
-class Dogs_from_URL:
+class Dogs_from_PC:
     dogs = {}
-
+    # def __init__():
+    #     self.name
     def __get_dogs(self, gender):
-        pets = get_pets_from_url(urls[gender])
-        dogs = []
-        for pet in pets:
-            if pet['spec'] not in REIST_BALD:
-                html_text = requests.get(pet['url']).text
-                soup = BeautifulSoup(html_text, 'html.parser')
-                name = get_html_element(soup, NAME_HTML_PART, NAME_HTML_ATTRIBUTE)
-                dogs.append(name)
-        return dogs
+        return os.listdir(f"{DOGS_PATH}/{gender}")
 
     def __get_hundin(self):
         return self.__get_dogs("Hündinen")
@@ -30,7 +24,7 @@ class Dogs_from_URL:
     
     def __get_welpen_pflegestelle(self):
         return self.__get_dogs("Pflegestelle")
-    
+
     def dog_list(self):
         self.dogs["Hündinen"] = self.__get_hundin()
         self.dogs["Rüden"] = self.__get_ruden()
@@ -38,8 +32,8 @@ class Dogs_from_URL:
         self.dogs["Welpen_und_Junghunde"] = self.__get_welpen_junghunde()
         self.dogs["Pflegestelle"] = self.__get_welpen_pflegestelle()
         return self.dogs
-    
-# class ManageFolders:
-        
-#     if not dog.dog_exist():
-#         dog.create_dog()
+
+
+# create_report()
+# create_pandoc()
+# read_pandoc_csv()

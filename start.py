@@ -1,9 +1,9 @@
 #!/usr/bin/python
-from dogs import *
-from doglist import *
-from cli import *
-from manage_folder import *
-from report import *
+from source.dogs import *
+from source.doglist import *
+from source.cli import *
+from source.manage_folder import *
+from source.report import *
 
 dogsGender = ["Hündinen", "Rüden", "Welpen_Madchen", "Welpen_und_Junghunde", "Pflegestelle"]
 

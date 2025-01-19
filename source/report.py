@@ -1,8 +1,7 @@
-from dogs import *
-from doglist import Doglist
+from source.dogs import *
+from source.doglist import Doglist
+from source.global_defines import REPORT_PATH
 
-REPORT_PATH = f"{pathlib.Path(__file__).parent.resolve()}/report"
-DOGS_PATH = f"{pathlib.Path(__file__).parent.resolve()}/hunde"
 
 def create_report(dogsList: Doglist):
     """Creates a report and saves it to a file.
