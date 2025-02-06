@@ -25,13 +25,23 @@ class Dogs_from_PC:
     def __get_welpen_pflegestelle(self):
         return self.__get_dogs("Pflegestelle")
 
-    def dog_list(self):
-        self.dogs["Hündinen"] = self.__get_hundin()
-        self.dogs["Rüden"] = self.__get_ruden()
-        self.dogs["Welpen_Madchen"] = self.__get_welpen_madchen()
-        self.dogs["Welpen_und_Junghunde"] = self.__get_welpen_junghunde()
-        self.dogs["Pflegestelle"] = self.__get_welpen_pflegestelle()
-        return self.dogs
+    def dog_list(self, gender):
+        if gender == "Hündinen":
+            return self.__get_hundin()
+        elif gender == "Rüden":
+            return self.__get_ruden()
+        elif gender == "Welpen_Madchen":
+            return self.__get_welpen_madchen()
+        elif gender == "Welpen_und_Junghunde":
+            return self.__get_welpen_junghunde()
+        elif gender == "Pflegestelle":
+            return self.__get_welpen_pflegestelle()
+        # self.dogs["Hündinen"] = self.__get_hundin()
+        # self.dogs["Rüden"] = self.__get_ruden()
+        # self.dogs["Welpen_Madchen"] = self.__get_welpen_madchen()
+        # self.dogs["Welpen_und_Junghunde"] = self.__get_welpen_junghunde()
+        # self.dogs["Pflegestelle"] = self.__get_welpen_pflegestelle()
+        # return self.dogs
 
 
 # create_report()

@@ -4,9 +4,12 @@ from source.global_defines import DOGS_PATH
 def create_new_dogs(gender):
     doggies = get_pets_from_url(urls[gender])
     for dog in doggies:
-        doggy = Dog(dog['url'], gender)
+        doggy = Dog(dog, gender)
         if not doggy.dog_exist():
+            print(f"doggy = {doggy.name} does not exist")
             doggy.create_dog()
+        else:
+            print(f"doggy = {doggy.name} exists")
 
 def get_path(gender, name):
     path = f"{DOGS_PATH}/{gender}/{name}"

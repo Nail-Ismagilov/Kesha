@@ -21,13 +21,14 @@ endings = {
 class Dog:
     """Main class Dog with instance url and gender
     """
-    def __init__(self, url, gender):
-        self.url = url
-        self.name = self.get_name()
+    def __init__(self, dog, gender):
+        self.url = dog['url']
+        self.name = dog['name']
         self.gender = gender
         # self.existedList = existedList
 
     def create_dog(self):
+        print(f"Creating dog: {self.name}")
         self.create_folder(self.get_path())
         self.set_description()
         self.get_and_save_images()
@@ -53,7 +54,7 @@ class Dog:
         gender_key = 'male' if is_male else 'female'
         adj = random.choice(adjectives[gender_key])
         ending = random.choice(endings[gender_key])
-        return f"{adj} {self.name} {ending}"
+        return f"{adj} {self.extract_name(self.get_description())} {ending}"
 
     def set_description(self):
         text_arr = []
@@ -108,3 +109,11 @@ class Dog:
     def del_path(self, path):
         shutil.rmtree(path)
         print(f"Dog folder deleted: {self.name}")
+
+    def extract_name(self, text):
+        # Use regex to find the line that starts with "Name:" and extract the name
+        match = re.search(r"Name: (.+)", text)
+        if match:
+            return match.group(1)
+        else:
+            return 

@@ -22,15 +22,15 @@ def create_report(dogsList: Doglist):
         with open(report, "w", encoding="utf-8") as file:
             file.write("GEBLIEBEN:\n")
             # file.write(f"  {gender}\n")
-            for dog in dogsList.left_dogs()[gender]:
+            for dog in dogsList.left_dogs():
                 file.write("    * " + dog + "\n")
 
             file.write("\nABGEHOLT:\n")
-            for dog in dogsList.happy_dogs()[gender]:
+            for dog in dogsList.happy_dogs():
                 file.write("    * " + dog + "\n")
 
             file.write("\nNEUE:\n")
-            for dog in  dogsList.new_dogs()[gender]:
+            for dog in  dogsList.new_dogs():
                 file.write("    * " + dog + "\n")
 
 def clean_report():
