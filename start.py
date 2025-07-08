@@ -18,24 +18,34 @@ def start():
     while (user_choice.upper() != EXIT):
         cli.create_menu()
         user_choice = input("Select Dog: ")
-        if user_choice.upper() != EXIT and int(user_choice) <= len(dogsGender):
-            gender = dogsGender[int(user_choice)-1]
-            
-            # create dogs list
-            print("createing dogs list")
-            dogList = Doglist(gender)
-
-            # create reports
-            print("createing dogs report")   
-            create_report(dogList)
-
-            print("createing new dogs")
-            # create folders
-            create_new_dogs(gender)
-
-            # deflete folders
-            for dog in dogList.happy_dogs():
-                delete_dog(gender, dog)
-            show_report(gender)
+        if user_choice.upper() != EXIT:
+            if user_choice == "6" or user_choice.upper() == "ALL":
+                # ALL command: process all genders
+                for gender in dogsGender:
+                    print(f"\nProcessing: {gender}")
+                    print("createing dogs list")
+                    dogList = Doglist(gender)
+                    print("createing dogs report")   
+                    create_report(dogList)
+                    print("createing new dogs")
+                    create_new_dogs(gender)
+                    for dog in dogList.happy_dogs():
+                        delete_dog(gender, dog)
+                    show_report(gender)
+            elif int(user_choice) <= len(dogsGender):
+                gender = dogsGender[int(user_choice)-1]
+                # create dogs list
+                print("createing dogs list")
+                dogList = Doglist(gender)
+                # create reports
+                print("createing dogs report")   
+                create_report(dogList)
+                print("createing new dogs")
+                # create folders
+                create_new_dogs(gender)
+                # deflete folders
+                for dog in dogList.happy_dogs():
+                    delete_dog(gender, dog)
+                show_report(gender)
 
 start()

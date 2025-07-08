@@ -10,32 +10,17 @@ class Doglist:
             # existingList = Dogs_from_PC() 
             # fromUrl = Dogs_from_URL()
 
-    def happy_dogs (self):
-        happyDogs = {}
-        for dogs in self.existingList:
-            happyDogs = []
-            for dog in self.existingList:
-                if dog not in self.internetList:
-                    happyDogs.append(dog)
-        return happyDogs
+    def happy_dogs(self):
+        # Dogs that are in existingList but not in internetList (gone)
+        return [dog for dog in self.existingList if dog not in self.internetList]
     
-    def new_dogs (self):
-        newDogs = {}
-        for dogs in self.internetList:
-            newDogs = []
-            for dog in self.internetList:
-                if dog not in self.existingList:
-                    newDogs.append(dog)
-        return newDogs
+    def new_dogs(self):
+        # Dogs that are in internetList but not in existingList (new)
+        return [dog for dog in self.internetList if dog not in self.existingList]
     
-    def left_dogs (self):
-        leftDogs = {}
-        for dogs in self.internetList:
-            leftDogs = []
-            for dog in self.internetList:
-                if dog in self.existingList:
-                    leftDogs.append(dog)
-        return leftDogs
+    def left_dogs(self):
+        # Dogs that are in both lists (still present)
+        return [dog for dog in self.internetList if dog in self.existingList]
 
 
 # print(existingList.dog_list())

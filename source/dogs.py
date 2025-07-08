@@ -65,14 +65,16 @@ class Dog:
         self.compose_text(text_arr)
 
     def compose_text(self, text_arr):
-        file = open("Maket.txt","r", encoding="utf-8")
-        for word in file:
-            word = re.sub("Name", f"{self.name}", word, flags=re.IGNORECASE)
-            text_arr.append(word)
-        file.close()
-        composed_text = open(f"{self.get_path()}/{self.name}.txt", "w+", encoding="utf-8")
-        for line in text_arr:
-            composed_text.write(line)  
+        try:
+            with open("Maket.txt","r", encoding="utf-8") as file:
+                for word in file:
+                    word = re.sub("Name", f"{self.name}", word, flags=re.IGNORECASE)
+                    text_arr.append(word)
+            with open(f"{self.get_path()}/{self.name}.txt", "w+", encoding="utf-8") as composed_text:
+                for line in text_arr:
+                    composed_text.write(line)
+        except Exception as e:
+            print(f"Error composing text for {self.name}: {e}")
 
     def get_and_save_images(self):
         counter = 0
@@ -86,13 +88,16 @@ class Dog:
         pass
     
     def save_image(self, image_url, counter):
-        img_data = requests.get(image_url).content
-        with open(f"{self.get_path()}/{self.name}{counter}.jpg", 'wb') as handler:
-            handler.write(img_data)
-        pass
+        try:
+            img_data = requests.get(image_url).content
+            with open(f"{self.get_path()}/{self.name}{counter}.jpg", 'wb') as handler:
+                handler.write(img_data)
+        except Exception as e:
+            print(f"Error saving image {counter} for {self.name}: {e}")
 
     def create_folder(self, path):
-        os.makedirs(path) 
+        from source.manage_folder import ensure_folder_exists
+        ensure_folder_exists(path)
 
     def dog_exist(self):
         process = False

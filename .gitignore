@@ -1,6 +1,7 @@
 .git/
 .gitignore
 __pycache__
+hunde/
 hunde/Hündinen/*
 hunde/Rüden/*
 hunde/Welpen_Madchen/*

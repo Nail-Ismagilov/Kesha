@@ -8,7 +8,10 @@ class Dogs_from_PC:
     # def __init__():
     #     self.name
     def __get_dogs(self, gender):
-        return os.listdir(f"{DOGS_PATH}/{gender}")
+        dir_path = f"{DOGS_PATH}/{gender}"
+        if not os.path.exists(dir_path):
+            return []
+        return os.listdir(dir_path)
 
     def __get_hundin(self):
         return self.__get_dogs("Hündinen")

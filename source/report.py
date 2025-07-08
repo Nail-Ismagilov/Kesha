@@ -1,6 +1,7 @@
 from source.dogs import *
 from source.doglist import Doglist
 from source.global_defines import REPORT_PATH
+from source.manage_folder import ensure_folder_exists
 
 
 def create_report(dogsList: Doglist):
@@ -16,6 +17,7 @@ def create_report(dogsList: Doglist):
     """
     for gender in urls.keys():
         report = f"{REPORT_PATH}/{gender}_report.txt"
+        ensure_folder_exists(REPORT_PATH)
 
         # pflegestelle = f"{REPORT_PATH}/pflegestelle_report.txt"
         # print(f"gender = {gender}")
@@ -38,11 +40,12 @@ def clean_report():
     """
     reports = [f for f in os.listdir(REPORT_PATH) if os.path.isfile(os.path.join(REPORT_PATH, f))]
     for report in reports:
-        with open(report, "r+") as file:
+        with open(os.path.join(REPORT_PATH, report), "r+") as file:
             file.truncate(0)
 
 def show_report(gender):
     file_path = f"{REPORT_PATH}/{gender}_report.txt"
+    ensure_folder_exists(REPORT_PATH)
     try:
         with open(file_path, 'r') as file:
             # Read the content of the file

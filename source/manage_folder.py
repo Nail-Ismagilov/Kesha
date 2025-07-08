@@ -1,5 +1,13 @@
-from source.dogs import *
+import os
+import shutil
+
+from source.dogs import Dog
 from source.global_defines import DOGS_PATH
+from source.elements_from_url import urls, get_pets_from_url
+
+def ensure_folder_exists(path):
+    """Create the folder if it does not exist."""
+    os.makedirs(path, exist_ok=True)
 
 def create_new_dogs(gender):
     doggies = get_pets_from_url(urls[gender])
