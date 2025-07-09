@@ -1,82 +1,220 @@
 import tkinter as tk
+from tkinter import ttk, font
 from tkinter.scrolledtext import ScrolledText
 from source.doglist import Doglist
 from source.manage_folder import create_new_dogs, delete_dog
 from source.report import create_report
 import source.report as report_module
 import os
+import webbrowser
 
 dogsGender = ["Hündinen", "Rüden", "Welpen_Madchen", "Welpen_und_Junghunde", "Pflegestelle"]
 
-def process_gender(gender, output):
+# --- Helper for status bar ---
+def set_status(status_var, msg):
+    status_var.set(msg)
+
+def process_gender(gender, output, status_var):
+    set_status(status_var, f"Processing {gender}...")
+    output.config(state='normal')
     output.insert(tk.END, f"\nProcessing: {gender}\n")
     output.insert(tk.END, "createing dogs list\n")
     dogList = Doglist(gender)
     output.insert(tk.END, "createing dogs report\n")
-    create_report(dogList)
+    create_report(dogList, gender)
     output.insert(tk.END, "createing new dogs\n")
     create_new_dogs(gender)
     for dog in dogList.happy_dogs():
         delete_dog(gender, dog)
-    show_report_gui(gender, output)
+    show_report_gui(gender, output, status_var)
     output.insert(tk.END, f"Done with {gender}\n")
     output.see(tk.END)
+    set_status(status_var, f"Done with {gender}.")
+    output.config(state='disabled')
 
-def process_all(output):
+def process_all(output, status_var):
     for gender in dogsGender:
-        process_gender(gender, output)
+        process_gender(gender, output, status_var)
 
-def show_new_dogs(selected_gender, output):
+def parse_report_section(report_text, section):
+    # section: 'NEUE:' or 'ABGEHOLT:'
+    lines = report_text.splitlines()
+    in_section = False
+    dogs = []
+    for line in lines:
+        if line.strip().upper() == section:
+            in_section = True
+            continue
+        if in_section:
+            if line.strip() == '' or line.strip().endswith(':'):
+                break
+            if line.strip().startswith('*'):
+                dogs.append(line.strip().lstrip('*').strip())
+    return dogs
+
+def show_new_and_gone_dogs(selected_gender, output, status_var):
+    set_status(status_var, f"Showing new and gone dogs for {selected_gender}")
+    output.config(state='normal')
     output.delete(1.0, tk.END)
-    output.insert(tk.END, f"==== New Dogs for {selected_gender} ====\n\n")
-    dogList = Doglist(selected_gender)
-    if dogList.existingList:
-        output.insert(tk.END, "Local dogs:\n")
-        for dog in sorted(dogList.existingList):
-            output.insert(tk.END, f"  • {dog}\n")
-        output.insert(tk.END, "\n")
-    if dogList.internetList:
-        output.insert(tk.END, "Online dogs:\n")
-        for dog in sorted(dogList.internetList):
-            output.insert(tk.END, f"  • {dog}\n")
-        output.insert(tk.END, "\n")
-    new_dogs = dogList.new_dogs()
-    output.insert(tk.END, "New dogs:\n")
-    if new_dogs:
-        for dog in sorted(new_dogs):
-            output.insert(tk.END, f"  • {dog}\n")
+    if selected_gender == "ALL":
+        for gender in dogsGender:
+            report_str = get_report_string(gender)
+            new_dogs = parse_report_section(report_str, 'NEUE:')
+            gone_dogs = parse_report_section(report_str, 'ABGEHOLT:')
+            output.insert(tk.END, f"==== New Dogs (from report) for {gender} ====" + "\n\n", 'header')
+            if new_dogs:
+                for dog in new_dogs:
+                    tag_name = f"new_{gender}_{dog}"
+                    output.insert(tk.END, f"🐶 ", (f"{tag_name}_emoji", tag_name, 'new', 'doglink'))
+                    output.insert(tk.END, f"{dog}\n", (f"{tag_name}_name", tag_name, 'new', 'doglink'))
+                    def callback(event, g=gender, d=dog):
+                        folder_path = os.path.join('hunde', g, d)
+                        try:
+                            os.startfile(folder_path)
+                        except Exception as e:
+                            print(f"[ERROR] Could not open folder: {folder_path} ({e})")
+                    output.tag_bind(f"{tag_name}_name", '<Enter>', lambda e, t=tag_name, d=dog: (
+                        output.tag_remove('doglink_hover', '1.0', 'end'),
+                        output.tag_add('doglink_hover', f"{e.widget.index('current').split('.')[0]}.{int(e.widget.index('current').split('.')[1])}", f"{e.widget.index('current').split('.')[0]}.{int(e.widget.index('current').split('.')[1])+len(d)}"),
+                        output.config(cursor='hand2')
+                    ))
+                    output.tag_bind(f"{tag_name}_name", '<Leave>', lambda e, t=tag_name: (
+                        output.tag_remove('doglink_hover', '1.0', 'end'),
+                        output.config(cursor='')
+                    ))
+                    output.tag_bind(tag_name, '<Button-1>', callback)
+            else:
+                output.insert(tk.END, "(None)\n", 'none')
+            output.insert(tk.END, "\n\n", 'section')
+            output.insert(tk.END, f"==== Happy Dogs (from report) for {gender} ====" + "\n\n", 'header')
+            if gone_dogs:
+                for dog in gone_dogs:
+                    tag_name = f"gone_{gender}_{dog}"
+                    output.insert(tk.END, f"🐶 ", (f"{tag_name}_emoji", tag_name, 'gone', 'doglink'))
+                    output.insert(tk.END, f"{dog}\n", (f"{tag_name}_name", tag_name, 'gone', 'doglink'))
+                    def callback(event, g=gender, d=dog):
+                        folder_path = os.path.join('hunde', g, d)
+                        try:
+                            os.startfile(folder_path)
+                        except Exception as e:
+                            print(f"[ERROR] Could not open folder: {folder_path} ({e})")
+                    output.tag_bind(f"{tag_name}_name", '<Enter>', lambda e, t=tag_name, d=dog: (
+                        output.tag_remove('doglink_hover', '1.0', 'end'),
+                        output.tag_add('doglink_hover', f"{e.widget.index('current').split('.')[0]}.{int(e.widget.index('current').split('.')[1])}", f"{e.widget.index('current').split('.')[0]}.{int(e.widget.index('current').split('.')[1])+len(d)}"),
+                        output.config(cursor='hand2')
+                    ))
+                    output.tag_bind(f"{tag_name}_name", '<Leave>', lambda e, t=tag_name: (
+                        output.tag_remove('doglink_hover', '1.0', 'end'),
+                        output.config(cursor='')
+                    ))
+                    output.tag_bind(tag_name, '<Button-1>', callback)
+            else:
+                output.insert(tk.END, "(None)\n", 'none')
+            output.insert(tk.END, "\n" + ("="*60) + "\n\n", 'section')
     else:
-        output.insert(tk.END, "  (None)\n")
+        report_str = get_report_string(selected_gender)
+        new_dogs = parse_report_section(report_str, 'NEUE:')
+        gone_dogs = parse_report_section(report_str, 'ABGEHOLT:')
+        output.insert(tk.END, f"==== New Dogs (from report) for {selected_gender} ====" + "\n\n", 'header')
+        if new_dogs:
+            for dog in new_dogs:
+                tag_name = f"new_{selected_gender}_{dog}"
+                output.insert(tk.END, f"🐶 ", (f"{tag_name}_emoji", tag_name, 'new', 'doglink'))
+                output.insert(tk.END, f"{dog}\n", (f"{tag_name}_name", tag_name, 'new', 'doglink'))
+                def callback(event, g=selected_gender, d=dog):
+                    folder_path = os.path.join('hunde', g, d)
+                    try:
+                        os.startfile(folder_path)
+                    except Exception as e:
+                        print(f"[ERROR] Could not open folder: {folder_path} ({e})")
+                output.tag_bind(f"{tag_name}_name", '<Enter>', lambda e, t=tag_name, d=dog: (
+                    output.tag_remove('doglink_hover', '1.0', 'end'),
+                    output.tag_add('doglink_hover', f"{e.widget.index('current').split('.')[0]}.{int(e.widget.index('current').split('.')[1])}", f"{e.widget.index('current').split('.')[0]}.{int(e.widget.index('current').split('.')[1])+len(d)}"),
+                    output.config(cursor='hand2')
+                ))
+                output.tag_bind(f"{tag_name}_name", '<Leave>', lambda e, t=tag_name: (
+                    output.tag_remove('doglink_hover', '1.0', 'end'),
+                    output.config(cursor='')
+                ))
+                output.tag_bind(tag_name, '<Button-1>', callback)
+        else:
+            output.insert(tk.END, "(None)\n", 'none')
+        output.insert(tk.END, "\n\n", 'section')
+        output.insert(tk.END, f"==== Happy Dogs (from report) for {selected_gender} ====" + "\n\n", 'header')
+        if gone_dogs:
+            for dog in gone_dogs:
+                tag_name = f"gone_{selected_gender}_{dog}"
+                output.insert(tk.END, f"🐶 ", (f"{tag_name}_emoji", tag_name, 'gone', 'doglink'))
+                output.insert(tk.END, f"{dog}\n", (f"{tag_name}_name", tag_name, 'gone', 'doglink'))
+                def callback(event, g=selected_gender, d=dog):
+                    folder_path = os.path.join('hunde', g, d)
+                    try:
+                        os.startfile(folder_path)
+                    except Exception as e:
+                        print(f"[ERROR] Could not open folder: {folder_path} ({e})")
+                output.tag_bind(f"{tag_name}_name", '<Enter>', lambda e, t=tag_name, d=dog: (
+                    output.tag_remove('doglink_hover', '1.0', 'end'),
+                    output.tag_add('doglink_hover', f"{e.widget.index('current').split('.')[0]}.{int(e.widget.index('current').split('.')[1])}", f"{e.widget.index('current').split('.')[0]}.{int(e.widget.index('current').split('.')[1])+len(d)}"),
+                    output.config(cursor='hand2')
+                ))
+                output.tag_bind(f"{tag_name}_name", '<Leave>', lambda e, t=tag_name: (
+                    output.tag_remove('doglink_hover', '1.0', 'end'),
+                    output.config(cursor='')
+                ))
+                output.tag_bind(tag_name, '<Button-1>', callback)
+        else:
+            output.insert(tk.END, "(None)\n", 'none')
     output.see(tk.END)
+    set_status(status_var, f"Displayed new and gone dogs for {selected_gender} (from report).")
+    output.config(state='disabled')
 
-def show_gone_dogs(selected_gender, output):
-    output.delete(1.0, tk.END)
-    output.insert(tk.END, f"==== Gone Dogs for {selected_gender} ====\n\n")
-    dogList = Doglist(selected_gender)
-    if dogList.existingList:
-        output.insert(tk.END, "Local dogs:\n")
-        for dog in sorted(dogList.existingList):
-            output.insert(tk.END, f"  • {dog}\n")
-        output.insert(tk.END, "\n")
-    if dogList.internetList:
-        output.insert(tk.END, "Online dogs:\n")
-        for dog in sorted(dogList.internetList):
-            output.insert(tk.END, f"  • {dog}\n")
-        output.insert(tk.END, "\n")
-    gone_dogs = dogList.happy_dogs()
-    output.insert(tk.END, "Gone dogs:\n")
-    if gone_dogs:
-        for dog in sorted(gone_dogs):
-            output.insert(tk.END, f"  • {dog}\n")
-    else:
-        output.insert(tk.END, "  (None)\n")
-    output.see(tk.END)
-
-def show_report_gui(selected_gender, output):
+def show_new_dogs(selected_gender, output, status_var):
+    set_status(status_var, f"Showing new dogs for {selected_gender}")
+    output.config(state='normal')
     output.delete(1.0, tk.END)
     report_str = get_report_string(selected_gender)
-    output.insert(tk.END, report_str)
+    new_dogs = parse_report_section(report_str, 'NEUE:')
+    output.insert(tk.END, f"==== New Dogs (from report) for {selected_gender} ====" + "\n\n", 'header')
+    if new_dogs:
+        for dog in new_dogs:
+            output.insert(tk.END, f"🐶 {dog}\n", 'new')
+    else:
+        output.insert(tk.END, "(None)\n", 'none')
     output.see(tk.END)
+    set_status(status_var, f"Displayed new dogs for {selected_gender} (from report).")
+    output.config(state='disabled')
+
+def show_gone_dogs(selected_gender, output, status_var):
+    set_status(status_var, f"Showing gone dogs for {selected_gender}")
+    output.config(state='normal')
+    output.delete(1.0, tk.END)
+    report_str = get_report_string(selected_gender)
+    gone_dogs = parse_report_section(report_str, 'ABGEHOLT:')
+    output.insert(tk.END, f"==== Gone Dogs (from report) for {selected_gender} ====" + "\n\n", 'header')
+    if gone_dogs:
+        for dog in gone_dogs:
+            output.insert(tk.END, f"🐶 {dog}\n", 'gone')
+    else:
+        output.insert(tk.END, "(None)\n", 'none')
+    output.see(tk.END)
+    set_status(status_var, f"Displayed gone dogs for {selected_gender} (from report).")
+    output.config(state='disabled')
+
+def show_report_gui(selected_gender, output, status_var):
+    set_status(status_var, f"Showing report for {selected_gender}")
+    output.config(state='normal')
+    output.delete(1.0, tk.END)
+    if selected_gender == "ALL":
+        for gender in dogsGender:
+            report_str = get_report_string(gender)
+            output.insert(tk.END, report_str, 'header')
+            output.insert(tk.END, "\n" + ("="*60) + "\n\n", 'section')
+    else:
+        report_str = get_report_string(selected_gender)
+        output.insert(tk.END, report_str, 'header')
+    output.see(tk.END)
+    set_status(status_var, f"Displayed report for {selected_gender}.")
+    output.config(state='disabled')
 
 def get_report_string(gender):
     file_path = os.path.join(report_module.REPORT_PATH, f"{gender}_report.txt")
@@ -89,38 +227,119 @@ def get_report_string(gender):
     except Exception as e:
         return f"An error occurred: {e}\n"
 
+# Add helpers to enable/disable buttons
+
+def set_buttons_state(buttons, state):
+    for btn in buttons:
+        btn.config(state=state)
+
+# Update process_selected to show 'Processing...' on the Process button and disable all action buttons
+
+def process_selected(selected_option, output, status_var, action_buttons):
+    set_buttons_state(action_buttons, tk.DISABLED)
+    orig_text = action_buttons[2]['text']
+    action_buttons[2].config(text='Processing...')
+    output.config(state='normal')
+    output.insert(tk.END, '\n[Processing... Please wait]\n', 'section')
+    output.see(tk.END)
+    output.config(state='disabled')
+    try:
+        if selected_option == "ALL":
+            process_all(output, status_var)
+        else:
+            process_gender(selected_option, output, status_var)
+    finally:
+        set_buttons_state(action_buttons, tk.NORMAL)
+        action_buttons[2].config(text=orig_text)
+        set_status(status_var, "Ready.")
+
 def main():
     root = tk.Tk()
     root.title("Kesha Dog Manager")
-    root.geometry("750x650")
+    root.geometry("850x700")
+    style = ttk.Style()
+    style.theme_use('clam')
 
-    frame = tk.Frame(root)
-    frame.pack(pady=10)
+    # Fonts
+    header_font = font.Font(family="Arial", size=14, weight="bold")
+    section_font = font.Font(family="Arial", size=11, weight="bold")
+    mono_font = font.Font(family="Consolas", size=11)
 
-    output = ScrolledText(root, width=90, height=30, state='normal')
-    output.pack(padx=10, pady=10)
+    # Title
+    title = ttk.Label(root, text="Kesha Dog Manager", font=header_font, anchor='center')
+    title.pack(pady=(10, 0))
 
-    # Gender selection dropdown
-    gender_var = tk.StringVar(value=dogsGender[0])
-    gender_menu = tk.OptionMenu(root, gender_var, *dogsGender)
-    gender_menu.pack(pady=5)
+    # Option selection (gender or ALL)
+    option_frame = ttk.Frame(root)
+    option_frame.pack(pady=10)
+    option_label = ttk.Label(option_frame, text="Select Option:", font=section_font)
+    option_label.pack(side=tk.LEFT, padx=5)
+    options = dogsGender + ["ALL"]
+    option_var = tk.StringVar(value=options[0])
+    option_menu = ttk.Combobox(option_frame, textvariable=option_var, values=options, state="readonly", width=20, font=mono_font)
+    option_menu.pack(side=tk.LEFT, padx=5)
 
-    # Button row
-    button_frame = tk.Frame(root)
-    button_frame.pack(pady=5)
+    # Create a frame on the left for all buttons
+    left_frame = ttk.Frame(root)
+    left_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10, anchor='n')
 
-    tk.Button(button_frame, text="Show New Dogs", width=18, command=lambda: show_new_dogs(gender_var.get(), output)).pack(side=tk.LEFT, padx=4)
-    tk.Button(button_frame, text="Show Gone Dogs", width=18, command=lambda: show_gone_dogs(gender_var.get(), output)).pack(side=tk.LEFT, padx=4)
-    tk.Button(button_frame, text="Show Report", width=18, command=lambda: show_report_gui(gender_var.get(), output)).pack(side=tk.LEFT, padx=4)
+    # Main action buttons (vertical)
+    btn_process = ttk.Button(left_frame, text="Wooff!", width=18)
+    btn_process.pack(side=tk.TOP, pady=4, anchor='w')
+    btn_new_gone = ttk.Button(left_frame, text="New & Happy", width=18, command=lambda: show_new_and_gone_dogs(option_var.get(), output, status_var))
+    btn_new_gone.pack(side=tk.TOP, pady=4, anchor='w')
+    btn_report = ttk.Button(left_frame, text="Report", width=18, command=lambda: show_report_gui(option_var.get(), output, status_var))
+    btn_report.pack(side=tk.TOP, pady=4, anchor='w')
+    action_buttons = [btn_new_gone, btn_report, btn_process]
+    btn_process.config(command=lambda: process_selected(option_var.get(), output, status_var, action_buttons))
 
-    # Main action buttons
-    action_frame = tk.Frame(root)
-    action_frame.pack(pady=5)
-    for gender in dogsGender:
-        btn = tk.Button(action_frame, text=gender, width=15, command=lambda g=gender: process_gender(g, output))
-        btn.pack(side=tk.LEFT, padx=5)
-    tk.Button(root, text="ALL", width=15, command=lambda: process_all(output)).pack(pady=5)
-    tk.Button(root, text="Exit", width=15, command=root.destroy).pack(pady=5)
+    # Website buttons (vertical, under main buttons)
+    def open_quoke():
+        webbrowser.open('https://quoka.de')
+
+    def open_kesha():
+        webbrowser.open('https://tierschutzverein-kesha.de')
+
+    btn_quoke = ttk.Button(left_frame, text="Quoka", width=18, command=open_quoke)
+    btn_kesha = ttk.Button(left_frame, text="Kesha Website", width=18, command=open_kesha)
+    btn_quoke.pack(side=tk.TOP, pady=4, anchor='w')
+    btn_kesha.pack(side=tk.TOP, pady=4, anchor='w')
+
+    # Remove individual gender buttons
+    # Main action buttons (removed)
+    # action_frame = ttk.Frame(root)
+    # action_frame.pack(pady=10)
+    # for gender in dogsGender:
+    #     ttk.Button(action_frame, text=gender, width=15, command=lambda g=gender: process_gender(g, output, status_var)).pack(side=tk.LEFT, padx=5)
+    # ttk.Button(root, text="ALL", width=15, command=lambda: process_all(output, status_var)).pack(pady=5)
+
+    btn_exit = ttk.Button(left_frame, text="Exit", width=18, command=root.destroy)
+    btn_exit.pack(side=tk.BOTTOM, pady=10, anchor='w')
+
+    # Output area
+    output_frame = ttk.Frame(root)
+    output_frame.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+    output = ScrolledText(output_frame, width=100, height=30, font=mono_font, wrap=tk.WORD)
+    output.pack(fill=tk.BOTH, expand=True)
+    output.config(state='disabled')
+
+    # Tag styles for output
+    output.tag_config('header', font=header_font, foreground='#2a4d69')
+    output.tag_config('section', font=section_font, foreground='#4b86b4')
+    output.tag_config('local', foreground='#555')
+    output.tag_config('online', foreground='#888')
+    output.tag_config('new', foreground='#228B22', font=section_font)
+    output.tag_config('gone', foreground='#B22222', font=section_font)
+    output.tag_config('none', foreground='#999')
+    large_dog_font = font.Font(family="Arial", size=18, weight="bold")
+    output.tag_config('doglink', background='#f0f0f0', borderwidth=1, relief='raised', foreground='#0077cc', underline=True, lmargin1=18, lmargin2=18, spacing1=6, spacing3=6, font=large_dog_font)
+    output.tag_config('doglink_hover', background='#b3e5fc', borderwidth=1, relief='raised', foreground='#005999', underline=True, lmargin1=18, lmargin2=18, spacing1=6, spacing3=6, font=large_dog_font)
+
+    # Status bar
+    status_var = tk.StringVar()
+    status_bar = ttk.Label(root, textvariable=status_var, relief=tk.SUNKEN, anchor='w', font=mono_font)
+    status_bar.pack(fill=tk.X, side=tk.BOTTOM, ipady=2)
+    set_status(status_var, "Ready.")
 
     root.mainloop()
 

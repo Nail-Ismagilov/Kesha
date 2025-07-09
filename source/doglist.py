@@ -3,10 +3,16 @@ from source.dogs_from_PC import Dogs_from_PC
 
 class Doglist:
     def __init__(self, gender):
-        print ("creating doglist from PC")
+        print (f"[DEBUG] creating doglist from PC for gender: {gender}")
         self.existingList = Dogs_from_PC().dog_list(gender) 
-        print ("creating doglist from URL")
+        print (f"[DEBUG] existingList for {gender}: {self.existingList}")
+        print (f"[DEBUG] creating doglist from URL for gender: {gender}")
         self.internetList = Dogs_from_URL().dog_list(gender)
+        print (f"[DEBUG] internetList for {gender}: {self.internetList}")
+        gone = [dog for dog in self.existingList if dog not in self.internetList]
+        new = [dog for dog in self.internetList if dog not in self.existingList]
+        print(f"[DEBUG] gone dogs for {gender}: {gone}")
+        print(f"[DEBUG] new dogs for {gender}: {new}")
             # existingList = Dogs_from_PC() 
             # fromUrl = Dogs_from_URL()
 

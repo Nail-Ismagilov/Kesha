@@ -4,36 +4,30 @@ from source.global_defines import REPORT_PATH
 from source.manage_folder import ensure_folder_exists
 
 
-def create_report(dogsList: Doglist):
-    """Creates a report and saves it to a file.
+def create_report(dogsList: Doglist, gender: str):
+    """Creates a report and saves it to a file for the given gender.
 
     Args:
-        path (str): The path to the directory where the report files are stored.
+        dogsList (Doglist): The Doglist for the gender.
         gender (str): The gender of the dogs to include in the report.
-        all (bool): Whether to print the output to the console or not.
 
     Returns:
         None
     """
-    for gender in urls.keys():
-        report = f"{REPORT_PATH}/{gender}_report.txt"
-        ensure_folder_exists(REPORT_PATH)
+    report = f"{REPORT_PATH}/{gender}_report.txt"
+    ensure_folder_exists(REPORT_PATH)
+    with open(report, "w", encoding="utf-8") as file:
+        file.write("GEBLIEBEN:\n")
+        for dog in dogsList.left_dogs():
+            file.write("    * " + dog + "\n")
 
-        # pflegestelle = f"{REPORT_PATH}/pflegestelle_report.txt"
-        # print(f"gender = {gender}")
-        with open(report, "w", encoding="utf-8") as file:
-            file.write("GEBLIEBEN:\n")
-            # file.write(f"  {gender}\n")
-            for dog in dogsList.left_dogs():
-                file.write("    * " + dog + "\n")
+        file.write("\nABGEHOLT:\n")
+        for dog in dogsList.happy_dogs():
+            file.write("    * " + dog + "\n")
 
-            file.write("\nABGEHOLT:\n")
-            for dog in dogsList.happy_dogs():
-                file.write("    * " + dog + "\n")
-
-            file.write("\nNEUE:\n")
-            for dog in  dogsList.new_dogs():
-                file.write("    * " + dog + "\n")
+        file.write("\nNEUE:\n")
+        for dog in  dogsList.new_dogs():
+            file.write("    * " + dog + "\n")
 
 def clean_report():
     """ 
