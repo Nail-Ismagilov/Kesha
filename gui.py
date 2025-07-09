@@ -281,19 +281,19 @@ def main():
     title = ctk.CTkLabel(root, text="Kesha Dog Manager", font=header_font)
     title.pack(pady=(10, 0))
 
-    # Option selection (gender or ALL)
-    option_frame = ctk.CTkFrame(root, fg_color="transparent")
-    option_frame.pack(pady=10)
-    option_label = ctk.CTkLabel(option_frame, text="Select Option:", font=section_font)
-    option_label.pack(side="left", padx=5)
-    options = dogsGender + ["ALL"]
-    option_var = ctk.StringVar(value=options[0])
-    option_menu = ctk.CTkComboBox(option_frame, variable=option_var, values=options, width=200, font=mono_font, state="readonly")
-    option_menu.pack(side="left", padx=5)
-
     # Create a frame on the left for all buttons
     left_frame = ctk.CTkFrame(root, fg_color="transparent")
     left_frame.pack(side="left", fill="y", padx=10, pady=10, anchor="n")
+
+    # Option selection (gender or ALL)
+    option_frame = ctk.CTkFrame(left_frame, fg_color="transparent")
+    option_label = ctk.CTkLabel(option_frame, text="Select Option:", font=section_font)
+    option_label.pack(side="top", anchor="w", pady=(0,2))
+    options = dogsGender + ["ALL"]
+    option_var = ctk.StringVar(value=options[0])
+    option_menu = ctk.CTkComboBox(option_frame, variable=option_var, values=options, width=200, font=mono_font, state="readonly")
+    option_menu.pack(side="top", anchor="w")
+    option_frame.pack(side="top", pady=(0, 10), anchor="w")
 
     # Main action buttons (vertical)
     btn_process = ctk.CTkButton(left_frame, text="Wooff!", width=180, command=lambda: process_selected(option_var.get(), output, status_var, action_buttons, progress_bar))
