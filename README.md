@@ -1,42 +1,41 @@
-# Kesha Project
+# Kesha Dog Manager
 
-## Overview
-Kesha is a Python-based tool for managing and reporting on dog data, including downloading images and generating reports. It is designed for modularity, performance, and ease of use.
+This application helps manage dog reports and lists for the Kesha animal welfare organization, now with a modern, user-friendly interface using [customtkinter](https://customtkinter.tomschimansky.com/).
 
 ## Features
-- Download and organize dog data from URLs
-- Generate and manage reports by gender
-- Automatic folder creation for all file operations
-- Modular, maintainable codebase
-- Error handling for file and network operations
+- Modern GUI with sidebar navigation
+- View, process, and generate dog reports
+- Clickable dog names open their folders
+- Dark mode and theming support
+- Emoji and improved visual feedback
+
+## Requirements
+- Python 3.7+
+- See `requirements.txt` for dependencies (including `customtkinter`)
 
 ## Installation
-1. Clone the repository:
-   ```sh
-   git clone <your-repo-url>
-   cd Kesha
+1. Clone the repository or download the source code.
+2. (Recommended) Create and activate a virtual environment:
    ```
-2. Create and activate a Python virtual environment:
-   ```sh
    python -m venv venv
-   # On Windows:
-   venv\Scripts\activate
-   # On macOS/Linux:
-   source venv/bin/activate
+   venv\Scripts\activate  # On Windows
+   source venv/bin/activate  # On macOS/Linux
    ```
-3. Ensure you have Python 3.7+ installed.
-4. Install required packages:
-   ```sh
+3. Install dependencies:
+   ```
    pip install -r requirements.txt
    ```
-   *(Create requirements.txt if needed, e.g., for requests, beautifulsoup4)*
 
 ## Usage
-- Run the main script:
-  ```sh
-  python start.py
-  ```
-- The scripts in `source/` provide CLI and programmatic access to dog data management and reporting.
+Run the GUI with:
+```
+python gui.py
+```
+
+## Notes
+- The GUI now uses `customtkinter` for a modern look and feel.
+- All previous features are preserved, with improved usability and appearance.
+- If you encounter issues, ensure you have installed all dependencies from `requirements.txt`.
 
 ## Recent Improvements
 - **Performance:** Reduced redundant file operations and improved efficiency in file/image handling.
