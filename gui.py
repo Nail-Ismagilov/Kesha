@@ -236,7 +236,7 @@ def set_buttons_state(buttons, state):
 
 # Update process_selected to show 'Processing...' on the Process button and disable all action buttons
 
-def process_selected(selected_option, output, status_var, action_buttons):
+def process_selected(selected_option, output, status_var, action_buttons, progress_bar):
     set_buttons_state(action_buttons, ctk.DISABLED)
     orig_text = action_buttons[2].cget('text')
     action_buttons[2].configure(text='Processing...')
@@ -244,15 +244,25 @@ def process_selected(selected_option, output, status_var, action_buttons):
     output.insert(ctk.END, '\n[Processing... Please wait]\n', 'section')
     output.see(ctk.END)
     output.configure(state='disabled')
+    output.update()  # Force update so message is visible
+    # Also update the root window to ensure all widgets refresh
+    output.winfo_toplevel().update()
+    # Show and start progress bar
+    progress_bar.pack(side="bottom", pady=(0, 20), anchor="w")
+    progress_bar.start()
     try:
         if selected_option == "ALL":
             process_all(output, status_var)
+            show_report_gui('ALL', output, status_var)
         else:
             process_gender(selected_option, output, status_var)
     finally:
         set_buttons_state(action_buttons, ctk.NORMAL)
         action_buttons[2].configure(text=orig_text)
         set_status(status_var, "Ready.")
+        # Stop and hide progress bar
+        progress_bar.stop()
+        progress_bar.pack_forget()
 
 def main():
     ctk.set_appearance_mode("system")  # or 'dark' or 'light'
@@ -286,7 +296,7 @@ def main():
     left_frame.pack(side="left", fill="y", padx=10, pady=10, anchor="n")
 
     # Main action buttons (vertical)
-    btn_process = ctk.CTkButton(left_frame, text="Wooff!", width=180, command=lambda: process_selected(option_var.get(), output, status_var, action_buttons))
+    btn_process = ctk.CTkButton(left_frame, text="Wooff!", width=180, command=lambda: process_selected(option_var.get(), output, status_var, action_buttons, progress_bar))
     btn_process.pack(side="top", pady=4, anchor="w")
     btn_new_gone = ctk.CTkButton(left_frame, text="New & Happy", width=180, command=lambda: show_new_and_gone_dogs(option_var.get(), output, status_var))
     btn_new_gone.pack(side="top", pady=4, anchor="w")
@@ -305,6 +315,11 @@ def main():
     btn_kesha = ctk.CTkButton(left_frame, text="Kesha Website", width=180, command=open_kesha)
     btn_quoke.pack(side="top", pady=4, anchor="w")
     btn_kesha.pack(side="top", pady=4, anchor="w")
+
+    # Progress bar (hidden by default)
+    progress_bar = ctk.CTkProgressBar(left_frame, width=180, mode='indeterminate')
+    progress_bar.pack(side="bottom", pady=(0, 20), anchor="w")
+    progress_bar.pack_forget()  # Hide initially
 
     # Remove individual gender buttons
     # Main action buttons (removed)
@@ -325,15 +340,18 @@ def main():
     output.configure(state="disabled")
 
     # Tag styles for output
-    output.tag_config('header', foreground='#2a4d69')
-    output.tag_config('section', foreground='#4b86b4')
-    output.tag_config('local', foreground='#555')
-    output.tag_config('online', foreground='#888')
-    output.tag_config('new', foreground='#228B22')
-    output.tag_config('gone', foreground='#B22222')
-    output.tag_config('none', foreground='#999')
+    output.tag_config('header', foreground='#ffffff')
+    output.tag_config('section', foreground='#e0e0e0')
+    output.tag_config('local', foreground='#cccccc')
+    output.tag_config('online', foreground='#bbbbbb')
+    output.tag_config('new', foreground='#7CFC00')  # light green
+    output.tag_config('gone', foreground='#FF6347') # light red
+    output.tag_config('none', foreground='#dddddd')
     output.tag_config('doglink', background='#f0f0f0', borderwidth=1, relief='raised', foreground='#0077cc', underline=True, lmargin1=18, lmargin2=18, spacing1=6, spacing3=6)
     output.tag_config('doglink_hover', background='#b3e5fc', borderwidth=1, relief='raised', foreground='#005999', underline=True, lmargin1=18, lmargin2=18, spacing1=6, spacing3=6)
+
+    # Set default text color to white for the output area
+    output.configure(text_color="#ffffff")
 
     # Status bar
     status_var = ctk.StringVar()

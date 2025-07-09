@@ -8,6 +8,7 @@ This application helps manage dog reports and lists for the Kesha animal welfare
 - Clickable dog names open their folders
 - Dark mode and theming support
 - Emoji and improved visual feedback
+- Improved readability with white text and light tag colors for all output
 
 ## Requirements
 - Python 3.7+
@@ -35,6 +36,7 @@ python gui.py
 ## Notes
 - The GUI now uses `customtkinter` for a modern look and feel.
 - All previous features are preserved, with improved usability and appearance.
+- Output text is white (with light tag colors) for better readability, especially in dark mode.
 - If you encounter issues, ensure you have installed all dependencies from `requirements.txt`.
 
 ## Recent Improvements
@@ -60,7 +62,7 @@ Kesha/
 ```
 
 ## Credits
-- Developed by [Your Name/Team]
+- Developed by [Nail Ismagilov]
 
 ## License
-[Specify your license here] 
+[] 
