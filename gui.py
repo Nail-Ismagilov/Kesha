@@ -241,6 +241,7 @@ def process_selected(selected_option, output, status_var, action_buttons, progre
     orig_text = action_buttons[2].cget('text')
     action_buttons[2].configure(text='Processing...')
     output.configure(state='normal')
+    output.delete(1.0, ctk.END)  # Clear the output window
     output.insert(ctk.END, '\n[Processing... Please wait]\n', 'section')
     output.see(ctk.END)
     output.configure(state='disabled')
