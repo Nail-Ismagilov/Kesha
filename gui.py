@@ -51,17 +51,16 @@ def parse_report_section(report_text, section):
                 dogs.append(line.strip().lstrip('*').strip())
     return dogs
 
-def show_new_and_gone_dogs(selected_gender, output, status_var):
-    set_status(status_var, f"Showing new and gone dogs for {selected_gender}")
-    # Set background color to match report window
-    output.configure(fg_color=output.cget('fg_color'))  # Use the same as in report window (default or custom)
+
+
+def show_new_dogs(selected_gender, output, status_var):
+    set_status(status_var, f"Showing new dogs for {selected_gender}")
     output.configure(state='normal')
     output.delete(1.0, ctk.END)
     if selected_gender == "ALL":
         for gender in dogsGender:
             report_str = get_report_string(gender)
             new_dogs = parse_report_section(report_str, 'NEUE:')
-            gone_dogs = parse_report_section(report_str, 'ABGEHOLT:')
             output.insert(ctk.END, f"==== New Dogs (from report) for {gender} ====" + "\n\n", 'header')
             if new_dogs:
                 for dog in new_dogs:
@@ -86,36 +85,10 @@ def show_new_and_gone_dogs(selected_gender, output, status_var):
                     output.tag_bind(tag_name, '<Button-1>', callback)
             else:
                 output.insert(ctk.END, "(None)\n", 'none')
-            output.insert(ctk.END, "\n\n", 'section')
-            output.insert(ctk.END, f"==== Happy Dogs (from report) for {gender} ====" + "\n\n", 'header')
-            if gone_dogs:
-                for dog in gone_dogs:
-                    tag_name = f"gone_{gender}_{dog}"
-                    output.insert(ctk.END, f"🐶 ", (f"{tag_name}_emoji", tag_name, 'gone', 'doglink'))
-                    output.insert(ctk.END, f"{dog}\n", (f"{tag_name}_name", tag_name, 'gone', 'doglink'))
-                    def callback(event, g=gender, d=dog):
-                        folder_path = os.path.join('hunde', g, d)
-                        try:
-                            os.startfile(folder_path)
-                        except Exception as e:
-                            print(f"[ERROR] Could not open folder: {folder_path} ({e})")
-                    output.tag_bind(f"{tag_name}_name", '<Enter>', lambda e, t=tag_name, d=dog: (
-                        output.tag_remove('doglink_hover', '1.0', 'end'),
-                        output.tag_add('doglink_hover', f"{e.widget.index('current').split('.')[0]}.{int(e.widget.index('current').split('.')[1])}", f"{e.widget.index('current').split('.')[0]}.{int(e.widget.index('current').split('.')[1])+len(d)}"),
-                        output.configure(cursor='hand2')
-                    ))
-                    output.tag_bind(f"{tag_name}_name", '<Leave>', lambda e, t=tag_name: (
-                        output.tag_remove('doglink_hover', '1.0', 'end'),
-                        output.configure(cursor='')
-                    ))
-                    output.tag_bind(tag_name, '<Button-1>', callback)
-            else:
-                output.insert(ctk.END, "(None)\n", 'none')
             output.insert(ctk.END, "\n" + ("="*60) + "\n\n", 'section')
     else:
         report_str = get_report_string(selected_gender)
         new_dogs = parse_report_section(report_str, 'NEUE:')
-        gone_dogs = parse_report_section(report_str, 'ABGEHOLT:')
         output.insert(ctk.END, f"==== New Dogs (from report) for {selected_gender} ====" + "\n\n", 'header')
         if new_dogs:
             for dog in new_dogs:
@@ -140,65 +113,36 @@ def show_new_and_gone_dogs(selected_gender, output, status_var):
                 output.tag_bind(tag_name, '<Button-1>', callback)
         else:
             output.insert(ctk.END, "(None)\n", 'none')
-        output.insert(ctk.END, "\n\n", 'section')
-        output.insert(ctk.END, f"==== Happy Dogs (from report) for {selected_gender} ====" + "\n\n", 'header')
-        if gone_dogs:
-            for dog in gone_dogs:
-                tag_name = f"gone_{selected_gender}_{dog}"
-                output.insert(ctk.END, f"🐶 ", (f"{tag_name}_emoji", tag_name, 'gone', 'doglink'))
-                output.insert(ctk.END, f"{dog}\n", (f"{tag_name}_name", tag_name, 'gone', 'doglink'))
-                def callback(event, g=selected_gender, d=dog):
-                    folder_path = os.path.join('hunde', g, d)
-                    try:
-                        os.startfile(folder_path)
-                    except Exception as e:
-                        print(f"[ERROR] Could not open folder: {folder_path} ({e})")
-                output.tag_bind(f"{tag_name}_name", '<Enter>', lambda e, t=tag_name, d=dog: (
-                    output.tag_remove('doglink_hover', '1.0', 'end'),
-                    output.tag_add('doglink_hover', f"{e.widget.index('current').split('.')[0]}.{int(e.widget.index('current').split('.')[1])}", f"{e.widget.index('current').split('.')[0]}.{int(e.widget.index('current').split('.')[1])+len(d)}"),
-                    output.configure(cursor='hand2')
-                ))
-                output.tag_bind(f"{tag_name}_name", '<Leave>', lambda e, t=tag_name: (
-                    output.tag_remove('doglink_hover', '1.0', 'end'),
-                    output.configure(cursor='')
-                ))
-                output.tag_bind(tag_name, '<Button-1>', callback)
-        else:
-            output.insert(ctk.END, "(None)\n", 'none')
-    output.see(ctk.END)
-    set_status(status_var, f"Displayed new and gone dogs for {selected_gender} (from report).")
-    output.configure(state='disabled')
-
-def show_new_dogs(selected_gender, output, status_var):
-    set_status(status_var, f"Showing new dogs for {selected_gender}")
-    output.configure(state='normal')
-    output.delete(1.0, ctk.END)
-    report_str = get_report_string(selected_gender)
-    new_dogs = parse_report_section(report_str, 'NEUE:')
-    output.insert(ctk.END, f"==== New Dogs (from report) for {selected_gender} ====" + "\n\n", 'header')
-    if new_dogs:
-        for dog in new_dogs:
-            output.insert(ctk.END, f"🐶 {dog}\n", 'new')
-    else:
-        output.insert(ctk.END, "(None)\n", 'none')
     output.see(ctk.END)
     set_status(status_var, f"Displayed new dogs for {selected_gender} (from report).")
     output.configure(state='disabled')
 
 def show_gone_dogs(selected_gender, output, status_var):
-    set_status(status_var, f"Showing gone dogs for {selected_gender}")
+    set_status(status_var, f"Showing happy dogs for {selected_gender}")
     output.configure(state='normal')
     output.delete(1.0, ctk.END)
-    report_str = get_report_string(selected_gender)
-    gone_dogs = parse_report_section(report_str, 'ABGEHOLT:')
-    output.insert(ctk.END, f"==== Gone Dogs (from report) for {selected_gender} ====" + "\n\n", 'header')
-    if gone_dogs:
-        for dog in gone_dogs:
-            output.insert(ctk.END, f"🐶 {dog}\n", 'gone')
+    if selected_gender == "ALL":
+        for gender in dogsGender:
+            report_str = get_report_string(gender)
+            gone_dogs = parse_report_section(report_str, 'ABGEHOLT:')
+            output.insert(ctk.END, f"==== Happy Dogs (from report) for {gender} ====" + "\n\n", 'header')
+            if gone_dogs:
+                for dog in gone_dogs:
+                    output.insert(ctk.END, f"🐶 {dog}\n", 'gone')
+            else:
+                output.insert(ctk.END, "(None)\n", 'none')
+            output.insert(ctk.END, "\n" + ("="*60) + "\n\n", 'section')
     else:
-        output.insert(ctk.END, "(None)\n", 'none')
+        report_str = get_report_string(selected_gender)
+        gone_dogs = parse_report_section(report_str, 'ABGEHOLT:')
+        output.insert(ctk.END, f"==== Happy Dogs (from report) for {selected_gender} ====" + "\n\n", 'header')
+        if gone_dogs:
+            for dog in gone_dogs:
+                output.insert(ctk.END, f"🐶 {dog}\n", 'gone')
+        else:
+            output.insert(ctk.END, "(None)\n", 'none')
     output.see(ctk.END)
-    set_status(status_var, f"Displayed gone dogs for {selected_gender} (from report).")
+    set_status(status_var, f"Displayed happy dogs for {selected_gender} (from report).")
     output.configure(state='disabled')
 
 def show_report_gui(selected_gender, output, status_var):
@@ -299,11 +243,13 @@ def main():
     # Main action buttons (vertical)
     btn_process = ctk.CTkButton(left_frame, text="Wooff!", width=180, command=lambda: process_selected(option_var.get(), output, status_var, action_buttons, progress_bar))
     btn_process.pack(side="top", pady=4, anchor="w")
-    btn_new_gone = ctk.CTkButton(left_frame, text="New & Happy", width=180, command=lambda: show_new_and_gone_dogs(option_var.get(), output, status_var))
-    btn_new_gone.pack(side="top", pady=4, anchor="w")
+    btn_new = ctk.CTkButton(left_frame, text="New Dogs", width=180, command=lambda: show_new_dogs(option_var.get(), output, status_var))
+    btn_new.pack(side="top", pady=4, anchor="w")
+    btn_happy = ctk.CTkButton(left_frame, text="Happy Dogs", width=180, command=lambda: show_gone_dogs(option_var.get(), output, status_var))
+    btn_happy.pack(side="top", pady=4, anchor="w")
     btn_report = ctk.CTkButton(left_frame, text="Report", width=180, command=lambda: show_report_gui(option_var.get(), output, status_var))
     btn_report.pack(side="top", pady=4, anchor="w")
-    action_buttons = [btn_new_gone, btn_report, btn_process]
+    action_buttons = [btn_new, btn_happy, btn_report, btn_process]
 
     # Website buttons (vertical, under main buttons)
     def open_quoke():
@@ -341,7 +287,7 @@ def main():
     output.configure(state="disabled")
 
     # Tag styles for output
-    output.tag_config('header', foreground='#ffffff')
+    output.tag_config('header', foreground='#2a4d69')
     output.tag_config('section', foreground='#e0e0e0')
     output.tag_config('local', foreground='#cccccc')
     output.tag_config('online', foreground='#bbbbbb')
@@ -352,7 +298,7 @@ def main():
     output.tag_config('doglink_hover', background='#b3e5fc', borderwidth=1, relief='raised', foreground='#005999', underline=True, lmargin1=18, lmargin2=18, spacing1=6, spacing3=6)
 
     # Set default text color to white for the output area
-    output.configure(text_color="#ffffff")
+    output.configure(text_color="#2a4d69")
 
     # Status bar
     status_var = ctk.StringVar()
