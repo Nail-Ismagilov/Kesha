@@ -2,6 +2,7 @@ from source.dogs import *
 from source.doglist import Doglist
 from source.global_defines import REPORT_PATH
 from source.manage_folder import ensure_folder_exists
+from datetime import datetime
 
 
 def create_report(dogsList: Doglist, gender: str):
@@ -16,7 +17,14 @@ def create_report(dogsList: Doglist, gender: str):
     """
     report = f"{REPORT_PATH}/{gender}_report.txt"
     ensure_folder_exists(REPORT_PATH)
+    
+    # Get current timestamp
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
     with open(report, "w", encoding="utf-8") as file:
+        file.write(f"Report created: {timestamp}\n")
+        file.write("="*50 + "\n\n")
+        
         file.write("GEBLIEBEN:\n")
         for dog in dogsList.left_dogs():
             file.write("    * " + dog + "\n")
