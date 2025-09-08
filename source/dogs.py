@@ -68,7 +68,7 @@ class Dog:
         try:
             with open("Maket.txt","r", encoding="utf-8") as file:
                 for word in file:
-                    word = re.sub("Name", f"{self.name}", word, flags=re.IGNORECASE)
+                    word = re.sub("Name", f"{self.clean_string(self.name)}", word, flags=re.IGNORECASE)
                     text_arr.append(word)
             with open(f"{self.get_path()}/{self.name}.txt", "w+", encoding="utf-8") as composed_text:
                 for line in text_arr:
@@ -122,3 +122,13 @@ class Dog:
             return match.group(1)
         else:
             return 
+        
+    def clean_string(self, text):
+        # Keep only alphabetic characters
+        letters_only = ''.join([char for char in text if char.isalpha()])
+        
+        # Capitalize first letter
+        if letters_only:
+            return letters_only[0].upper() + letters_only[1:].lower()
+        else:
+            return ""
