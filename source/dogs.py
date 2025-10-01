@@ -111,10 +111,50 @@ class Dog:
         path = f"{DOGS_PATH}/{self.gender}/{self.name}"
         return path
     
-    def del_path(self, path):
-        shutil.rmtree(path)
-        print(f"Dog folder deleted: {self.name}")
-
+    def del_path(self, path, max_retries=3):
+        """Delete folder with retry logic for Windows/OneDrive compatibility"""
+        if not os.path.exists(path):
+            print(f"Path does not exist: {path}")
+            return False
+        
+        for attempt in range(max_retries):
+            try:
+                # Remove read-only attributes from all files and folders
+                for root, dirs, files in os.walk(path):
+                    for d in dirs:
+                        try:
+                            os.chmod(os.path.join(root, d), 0o777)
+                        except:
+                            pass
+                    for f in files:
+                        try:
+                            file_path = os.path.join(root, f)
+                            os.chmod(file_path, 0o777)
+                        except:
+                            pass
+                
+                # Attempt to delete
+                shutil.rmtree(path)
+                print(f"✓ Dog folder deleted: {self.name}")
+                return True
+                
+            except PermissionError as e:
+                if attempt < max_retries - 1:
+                    print(f"⚠ Permission denied for {self.name}, retrying in 1 second... (Attempt {attempt + 1}/{max_retries})")
+                    time.sleep(1)
+                else:
+                    print(f"✗ Cannot delete '{self.name}': Access denied after {max_retries} attempts")
+                    print(f"  Possible causes: OneDrive sync, file in use, or insufficient permissions")
+                    print(f"  Path: {path}")
+                    # Don't raise the exception, just return False
+                    return False
+                    
+            except Exception as e:
+                print(f"✗ Unexpected error deleting '{self.name}': {e}")
+                return False
+        
+        return False
+    
     def extract_name(self, text):
         # Use regex to find the line that starts with "Name:" and extract the name
         match = re.search(r"Name: (.+)", text)
