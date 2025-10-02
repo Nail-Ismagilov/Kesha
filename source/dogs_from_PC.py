@@ -11,7 +11,10 @@ class Dogs_from_PC:
         dir_path = f"{DOGS_PATH}/{gender}"
         if not os.path.exists(dir_path):
             return []
-        return os.listdir(dir_path)
+        dogs = os.listdir(dir_path)
+        dogs = [dog.lower() for dog in dogs]
+        dogs.sort()  # Sorts in place
+        return dogs
 
     def __get_hundin(self):
         return self.__get_dogs("Hündinen")

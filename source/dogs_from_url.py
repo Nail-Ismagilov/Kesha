@@ -15,6 +15,8 @@ class Dogs_from_URL:
                 # name = 
                 # name = get_html_element(soup, NAME_HTML_PART, NAME_HTML_ATTRIBUTE)
                 dogs.append(pet['name'])
+        dogs = [dog.lower() for dog in dogs]
+        dogs.sort()
         return dogs
 
     def __get_hundin(self):
