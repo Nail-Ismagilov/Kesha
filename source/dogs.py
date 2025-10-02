@@ -47,7 +47,36 @@ class Dog:
         html_text = requests.get(self.url).text
         soup = BeautifulSoup(html_text, 'html.parser')
         description = soup.find('div', attrs = {'id':'page-content'}).getText()
+        # Remove excessive whitespace and normalize line breaks
+        # description = ' '.join(description.split())
+        description = self.clean_empty_lines(description)
+        description = re.sub(r'Ausreise', r'\nAusreise', description)
+        description = re.sub(r'Vorgeschichte', r'\n\nVorgeschichte', description)
+        description = re.sub(r'Charakter', r'\nCharakter', description)
+        description = re.sub(r'Adoption', r'\nAdoption', description)
+        description = re.sub(r'Hier geht es zum Video', r'\nHier geht es zum Video', description)
+        
         return description
+
+    def clean_empty_lines(self, text):
+        """
+        Remove empty lines from text.
+        Works with both strings and lists.
+        
+        Args:
+            text: String or list of strings
+        
+        Returns:
+            Cleaned text in the same format as input
+        """
+        if isinstance(text, str):
+            lines = text.splitlines()
+            cleaned = [line for line in lines if line.strip()]
+            return '\n'.join(cleaned)
+        elif isinstance(text, list):
+            return [line for line in text if line.strip()]
+        else:
+            raise TypeError("Input must be string or list")
 
     def get_title(self):
         is_male = self.gender in ['Rüden', 'Welpen_und_Junghunde']
@@ -59,7 +88,7 @@ class Dog:
     def set_description(self):
         text_arr = []
         title = self.get_title()
-        text_arr.append(f"{title}\n\n")  # Add title with double line break
+        text_arr.append(title)  # Title without extra line breaks
         description = self.get_description()
         text_arr.append(description.split('wird nach positiver Vorkontrolle ')[0])
         self.compose_text(text_arr)
