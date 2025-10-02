@@ -46,10 +46,20 @@ class Dog:
     def get_description(self):
         html_text = requests.get(self.url).text
         soup = BeautifulSoup(html_text, 'html.parser')
-        description = soup.find('div', attrs = {'id':'page-content'}).getText()
+        page_content = soup.find('div', attrs = {'id':'page-content'})
+         # Replace <a> tags with text and URL
+        for a_tag in page_content.find_all('a'):
+            link_text = a_tag.get_text()
+            link_url = a_tag.get('href', '')
+            # Replace the anchor tag with "text (url)" format
+            a_tag.replace_with(f"{link_text} ({link_url})")
+
+        description = page_content.get_text()
+        # description = soup.find('div', attrs = {'id':'page-content'}).getText()
         # Remove excessive whitespace and normalize line breaks
         # description = ' '.join(description.split())
         description = self.clean_empty_lines(description)
+        description = re.sub(r'https://www.', r'', description)
         description = re.sub(r'Ausreise', r'\nAusreise', description)
         description = re.sub(r'Vorgeschichte', r'\n\nVorgeschichte', description)
         description = re.sub(r'Charakter', r'\nCharakter', description)
