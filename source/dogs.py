@@ -93,7 +93,7 @@ class Dog:
         gender_key = 'male' if is_male else 'female'
         adj = random.choice(adjectives[gender_key])
         ending = random.choice(endings[gender_key])
-        return f"{adj} {self.extract_name(self.get_description())} {ending}"
+        return f"{adj} {self.extract_name(self.get_description())} {ending}\n"
 
     def set_description(self):
         text_arr = []
