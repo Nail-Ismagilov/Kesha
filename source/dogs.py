@@ -9,12 +9,37 @@ from source.global_defines import DOGS_PATH
 
 PFLEGESTELLE = "*befindet sich auf einer Pflegestelle in Deutschland."
 adjectives = {
-    'male': ['Süßer', 'Schöner', 'Lieber'],
-    'female': [ 'Süße', 'Schöne', 'Liebe']
+    'male': [
+        'Süßer', 'Schöner', 'Lieber',
+        'Tapferer', 'Treuer', 'Verspielter', 'Zärtlicher',
+        'Sanfter', 'Fröhlicher', 'Neugieriger', 'Charmanter',
+        'Witziger', 'Herzlicher', 'Lustiger', 'Sensibler',
+        'Abenteuerlustiger', 'Geduldiger'
+    ],
+    'female': [
+        'Süße', 'Schöne', 'Liebe',
+        'Tapfere', 'Treue', 'Verspielte', 'Zärtliche',
+        'Sanfte', 'Fröhliche', 'Neugierige', 'Charmante',
+        'Witzige', 'Herzliche', 'Lustige', 'Sensible',
+        'Abenteuerlustige', 'Geduldige'
+    ]
 }
+
 endings = {
-    'male': ['sucht seine Familie', 'sucht liebevolle Familie','sucht liebevolles Zuhause', 'sucht ein neues Zuhause'],
-    'female': ['sucht ihre Familie', 'sucht liebevolle Familie', 'sucht liebevolles Zuhause', 'sucht ein neues Zuhause']
+    'male': [
+        'sucht seine Familie', 'sucht liebevolle Familie', 'sucht liebevolles Zuhause', 'sucht ein neues Zuhause',
+        'wartet auf sein Für-immer-Zuhause', 'möchte endlich ankommen', 'träumt von einem warmen Körbchen',
+        'ist bereit für sein neues Abenteuer', 'freut sich auf liebe Menschen', 'möchte Herzen erobern',
+        'sucht ein Zuhause mit Herz', 'ist bereit für seine zweite Chance', 'sucht Menschen mit Herz',
+        'möchte Teil einer liebevollen Familie werden'
+    ],
+    'female': [
+        'sucht ihre Familie', 'sucht liebevolle Familie', 'sucht liebevolles Zuhause', 'sucht ein neues Zuhause',
+        'wartet auf ihr Für-immer-Zuhause', 'möchte endlich ankommen', 'träumt von einem warmen Körbchen',
+        'ist bereit für ihr neues Abenteuer', 'freut sich auf liebe Menschen', 'möchte Herzen erobern',
+        'sucht ein Zuhause mit Herz', 'ist bereit für ihre zweite Chance', 'sucht Menschen mit Herz',
+        'möchte Teil einer liebevollen Familie werden'
+    ]
 }
         
 
