@@ -3,8 +3,12 @@ from customtkinter import CTkFont, CTkTextbox
 from source.doglist import Doglist
 from source.manage_folder import create_new_dogs, delete_dog
 from source.report import create_report
+from source.global_defines import DOGS_PATH
 import source.report as report_module
 import os
+import sys
+import subprocess
+import threading
 import webbrowser
 from datetime import datetime
 
@@ -14,27 +18,31 @@ dogsGender = ["Hündinen", "Rüden", "Welpen_Madchen", "Welpen_und_Junghunde", "
 def set_status(status_var, msg):
     status_var.set(msg)
 
-def process_gender(gender, output, status_var):
-    set_status(status_var, f"Processing {gender}...")
+def _append_output(output, msg):
+    """Append text to the output box. MUST be called on the Tk main thread."""
     output.configure(state='normal')
-    output.insert(ctk.END, f"\nProcessing: {gender}\n")
-    output.insert(ctk.END, "createing dogs list\n")
-    dogList = Doglist(gender)
-    output.insert(ctk.END, "createing dogs report\n")
-    create_report(dogList, gender)
-    output.insert(ctk.END, "createing new dogs\n")
-    create_new_dogs(gender)
-    for dog in dogList.happy_dogs():
-        delete_dog(gender, dog)
-    show_report_gui(gender, output, status_var)
-    output.insert(ctk.END, f"Done with {gender}\n")
+    output.insert(ctk.END, msg)
     output.see(ctk.END)
-    set_status(status_var, f"Done with {gender}.")
     output.configure(state='disabled')
 
-def process_all(output, status_var):
+def process_gender(gender, log):
+    """Backend work for one gender. Touches NO Tk widgets, so it is safe to run
+    on a worker thread; `log` is a thread-safe callback that marshals text to
+    the UI on the main thread."""
+    log(f"\nProcessing: {gender}\n")
+    log("creating dogs list\n")
+    dogList = Doglist(gender)
+    log("creating dogs report\n")
+    create_report(dogList, gender)
+    log("creating new dogs\n")
+    create_new_dogs(gender, dogList.pets)
+    for dog in dogList.happy_dogs():
+        delete_dog(gender, dog)
+    log(f"Done with {gender}\n")
+
+def process_all(log):
     for gender in dogsGender:
-        process_gender(gender, output, status_var)
+        process_gender(gender, log)
 
 def parse_report_section(report_text, section):
     # section: 'NEUE:' or 'ABGEHOLT:'
@@ -195,9 +203,14 @@ def show_new_dogs(output, status_var, search_term=""):
                 output.insert(ctk.END, f"🐶 ", (f"{tag_name}_emoji", tag_name, 'new', 'doglink'))
                 output.insert(ctk.END, f"{dog}\n", (f"{tag_name}_name", tag_name, 'new', 'doglink'))
                 def callback(event, g=gender, d=dog):
-                    folder_path = os.path.join('hunde', g, d)
+                    folder_path = os.path.join(DOGS_PATH, g, d)
                     try:
-                        os.startfile(folder_path)
+                        if sys.platform.startswith('win'):
+                            os.startfile(folder_path)
+                        elif sys.platform == 'darwin':
+                            subprocess.run(['open', folder_path])
+                        else:
+                            subprocess.run(['xdg-open', folder_path])
                     except Exception as e:
                         print(f"[ERROR] Could not open folder: {folder_path} ({e})")
                 output.tag_bind(f"{tag_name}_name", '<Enter>', lambda e, t=tag_name, d=dog: (
@@ -294,31 +307,42 @@ def set_buttons_state(buttons, state):
 
 # Update process_selected to show 'Processing...' on the Process button and disable all action buttons
 
-def process_selected(output, status_var, action_buttons, progress_bar):
+def process_selected(root, output, status_var, action_buttons, progress_bar):
     set_buttons_state(action_buttons, ctk.DISABLED)
     orig_text = action_buttons[0].cget('text')
     action_buttons[0].configure(text='Processing...')
+    set_status(status_var, "Processing...")
     output.configure(state='normal')
     output.delete(1.0, ctk.END)  # Clear the output window
     output.insert(ctk.END, '\n[Processing... Please wait]\n', 'section')
     output.see(ctk.END)
     output.configure(state='disabled')
-    output.update()  # Force update so message is visible
-    # Also update the root window to ensure all widgets refresh
-    output.winfo_toplevel().update()
-    # Show and start progress bar
+    # Show and start progress bar. It animates now because the heavy work runs
+    # on a worker thread, leaving the Tk event loop free to drive it.
     progress_bar.pack(side="bottom", pady=(0, 20), anchor="w")
     progress_bar.start()
-    try:
-        process_all(output, status_var)
+
+    def log(msg):
+        # Called from the worker thread -> hop back to the Tk main thread.
+        root.after(0, lambda: _append_output(output, msg))
+
+    def done():
         show_report_gui('ALL', output, status_var)
-    finally:
         set_buttons_state(action_buttons, ctk.NORMAL)
         action_buttons[0].configure(text=orig_text)
         set_status(status_var, "Ready.")
-        # Stop and hide progress bar
         progress_bar.stop()
         progress_bar.pack_forget()
+
+    def worker():
+        try:
+            process_all(log)
+        except Exception as e:
+            root.after(0, lambda: _append_output(output, f"\n[ERROR] {e}\n"))
+        finally:
+            root.after(0, done)
+
+    threading.Thread(target=worker, daemon=True).start()
 
 def main():
     ctk.set_appearance_mode("system")  # or 'dark' or 'light'
@@ -351,7 +375,7 @@ def main():
     search_frame.pack(side="top", pady=(0, 15), anchor="w")
     
     # Main action buttons (vertical)
-    btn_process = ctk.CTkButton(left_frame, text="🚀 Wooff!", width=180, command=lambda: process_selected(output, status_var, action_buttons, progress_bar))
+    btn_process = ctk.CTkButton(left_frame, text="🚀 Wooff!", width=180, command=lambda: process_selected(root, output, status_var, action_buttons, progress_bar))
     btn_process.pack(side="top", pady=4, anchor="w")
     btn_new = ctk.CTkButton(left_frame, text="🆕 New Dogs", width=180, command=lambda: show_new_dogs(output, status_var, search_var.get()))
     btn_new.pack(side="top", pady=4, anchor="w")
@@ -400,7 +424,7 @@ def main():
     # Bind keyboard shortcuts
     root.bind('<Control-n>', lambda e: show_new_dogs(output, status_var, search_var.get()))
     root.bind('<Control-h>', lambda e: show_gone_dogs(output, status_var, search_var.get()))
-    root.bind('<Control-w>', lambda e: process_selected(output, status_var, action_buttons, progress_bar))
+    root.bind('<Control-w>', lambda e: process_selected(root, output, status_var, action_buttons, progress_bar))
     root.bind('<Control-f>', lambda e: search_entry.focus())
     root.bind('<Control-s>', lambda e: show_statistics_dashboard(root))
     root.bind('<Escape>', lambda e: (search_var.set(''), output.focus()))

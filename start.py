@@ -23,27 +23,27 @@ def start():
                 # ALL command: process all genders
                 for gender in dogsGender:
                     print(f"\nProcessing: {gender}")
-                    print("createing dogs list")
+                    print("creating dogs list")
                     dogList = Doglist(gender)
-                    print("createing dogs report")   
-                    create_report(dogList)
-                    print("createing new dogs")
-                    create_new_dogs(gender)
+                    print("creating dogs report")
+                    create_report(dogList, gender)
+                    print("creating new dogs")
+                    create_new_dogs(gender, dogList.pets)
                     for dog in dogList.happy_dogs():
                         delete_dog(gender, dog)
                     show_report(gender)
             elif int(user_choice) <= len(dogsGender):
                 gender = dogsGender[int(user_choice)-1]
                 # create dogs list
-                print("createing dogs list")
+                print("creating dogs list")
                 dogList = Doglist(gender)
                 # create reports
-                print("createing dogs report")   
-                create_report(dogList)
-                print("createing new dogs")
+                print("creating dogs report")
+                create_report(dogList, gender)
+                print("creating new dogs")
                 # create folders
-                create_new_dogs(gender)
-                # deflete folders
+                create_new_dogs(gender, dogList.pets)
+                # delete folders
                 for dog in dogList.happy_dogs():
                     delete_dog(gender, dog)
                 show_report(gender)

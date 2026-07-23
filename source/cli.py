@@ -26,11 +26,3 @@ class CLI:
         print("6 - ALL                     " + "(    /     |")
         print("E - Exit                    " + " ===/___) ||")
         print("============================" )
-
-    def show_report(reportData):
-        for data in reportData.keys():
-            print(f"{data.upper()}:")
-            count = 0
-            for dog in data:
-                count += 1
-                print(f"{count} - {dog}")
