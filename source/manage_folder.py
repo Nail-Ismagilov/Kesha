@@ -11,7 +11,7 @@ def ensure_folder_exists(path):
     """Create the folder if it does not exist."""
     os.makedirs(path, exist_ok=True)
 
-def create_new_dogs(gender, doggies=None):
+def create_new_dogs(gender, doggies=None, on_dog_done=None):
     # Reuse the listing already scraped by Doglist when provided, so the page
     # is fetched once per gender instead of twice.
     if doggies is None:
@@ -20,6 +20,8 @@ def create_new_dogs(gender, doggies=None):
         # Skip "reist bald" dogs: Doglist excludes them from the online list, so
         # creating folders for them here would cause churn + false "adopted".
         if dog['spec'] in REIST_BALD:
+            if on_dog_done:
+                on_dog_done()
             continue
         doggy = Dog(dog, gender)
         if not doggy.dog_exist():
@@ -27,6 +29,8 @@ def create_new_dogs(gender, doggies=None):
             doggy.create_dog()
         else:
             print(f"doggy = {doggy.name} exists")
+        if on_dog_done:
+            on_dog_done()
 
 def get_path(gender, name):
     path = f"{DOGS_PATH}/{gender}/{name}"

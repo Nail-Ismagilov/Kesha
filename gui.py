@@ -25,24 +25,57 @@ def _append_output(output, msg):
     output.see(ctk.END)
     output.configure(state='disabled')
 
-def process_gender(gender, log):
+# Rough weight of each phase within one gender's slice of the progress bar.
+# "Creating new dogs" dominates real wall-clock time (network + image
+# downloads per dog), so it gets most of the budget; the rest are quick.
+LIST_WEIGHT = 0.05
+REPORT_WEIGHT = 0.05
+CREATE_WEIGHT = 0.70
+DELETE_WEIGHT = 0.20
+
+def process_gender(gender, log, progress):
     """Backend work for one gender. Touches NO Tk widgets, so it is safe to run
-    on a worker thread; `log` is a thread-safe callback that marshals text to
-    the UI on the main thread."""
+    on a worker thread; `log`/`progress` are thread-safe callbacks that marshal
+    text/progress updates to the UI on the main thread. `progress(fraction)`
+    reports 0..1 completion of THIS gender's work, updated per-dog (not just
+    once per phase) so it never sits frozen while many dogs/images download."""
     log(f"\nProcessing: {gender}\n")
     log("creating dogs list\n")
     dogList = Doglist(gender)
+    progress(LIST_WEIGHT)
+
     log("creating dogs report\n")
     create_report(dogList, gender)
+    progress(LIST_WEIGHT + REPORT_WEIGHT)
+
     log("creating new dogs\n")
-    create_new_dogs(gender, dogList.pets)
-    for dog in dogList.happy_dogs():
+    total_pets = len(dogList.pets)
+    created_count = [0]
+
+    def on_dog_done():
+        created_count[0] += 1
+        frac = LIST_WEIGHT + REPORT_WEIGHT + CREATE_WEIGHT * (created_count[0] / total_pets)
+        progress(frac)
+
+    create_new_dogs(gender, dogList.pets, on_dog_done=on_dog_done if total_pets else None)
+    progress(LIST_WEIGHT + REPORT_WEIGHT + CREATE_WEIGHT)
+
+    happy = dogList.happy_dogs()
+    total_happy = len(happy)
+    for i, dog in enumerate(happy, start=1):
         delete_dog(gender, dog)
+        progress(LIST_WEIGHT + REPORT_WEIGHT + CREATE_WEIGHT + DELETE_WEIGHT * (i / total_happy))
+
+    progress(1.0)
     log(f"Done with {gender}\n")
 
-def process_all(log):
-    for gender in dogsGender:
-        process_gender(gender, log)
+def process_all(log, progress):
+    """progress(fraction) reports 0..1 completion across ALL genders."""
+    n = len(dogsGender)
+    for i, gender in enumerate(dogsGender):
+        def gender_progress(within_gender_fraction, i=i):
+            progress((i + within_gender_fraction) / n)
+        process_gender(gender, log, gender_progress)
 
 def parse_report_section(report_text, section):
     # section: 'NEUE:' or 'ABGEHOLT:'
@@ -352,7 +385,13 @@ def set_buttons_state(buttons, state):
 
 # Update process_selected to show 'Processing...' on the Process button and disable all action buttons
 
-def process_selected(root, output, status_var, action_buttons, progress_bar):
+def _set_progress(progress_bar, progress_label, fraction):
+    """Update the determinate progress bar + its percentage label.
+    MUST be called on the Tk main thread."""
+    progress_bar.set(fraction)
+    progress_label.configure(text=f"{round(fraction * 100)}%")
+
+def process_selected(root, output, status_var, action_buttons, progress_frame, progress_bar, progress_label):
     set_buttons_state(action_buttons, ctk.DISABLED)
     orig_text = action_buttons[0].cget('text')
     action_buttons[0].configure(text='Processing...')
@@ -362,10 +401,14 @@ def process_selected(root, output, status_var, action_buttons, progress_bar):
     output.insert(ctk.END, '\n[Processing... Please wait]\n', 'section')
     output.see(ctk.END)
     output.configure(state='disabled')
-    # Show and start progress bar. It animates now because the heavy work runs
-    # on a worker thread, leaving the Tk event loop free to drive it.
-    progress_bar.pack(side="bottom", pady=(0, 20), anchor="w")
-    progress_bar.start()
+    # Show the progress bar+label. It advances smoothly now because the heavy
+    # work runs on a worker thread, leaving the Tk event loop free to redraw.
+    progress_frame.pack(side="bottom", pady=(0, 20), anchor="w")
+    _set_progress(progress_bar, progress_label, 0)
+
+    def set_fraction(fraction):
+        # Called from the worker thread -> hop back to the Tk main thread.
+        root.after(0, lambda: _set_progress(progress_bar, progress_label, fraction))
 
     def log(msg):
         # Called from the worker thread -> hop back to the Tk main thread.
@@ -376,12 +419,11 @@ def process_selected(root, output, status_var, action_buttons, progress_bar):
         set_buttons_state(action_buttons, ctk.NORMAL)
         action_buttons[0].configure(text=orig_text)
         set_status(status_var, "Ready.")
-        progress_bar.stop()
-        progress_bar.pack_forget()
+        progress_frame.pack_forget()
 
     def worker():
         try:
-            process_all(log)
+            process_all(log, set_fraction)
         except Exception as e:
             root.after(0, lambda: _append_output(output, f"\n[ERROR] {e}\n"))
         finally:
@@ -420,7 +462,7 @@ def main():
     search_frame.pack(side="top", pady=(0, 15), anchor="w")
     
     # Main action buttons (vertical)
-    btn_process = ctk.CTkButton(left_frame, text="🚀 Wooff!", width=180, command=lambda: process_selected(root, output, status_var, action_buttons, progress_bar))
+    btn_process = ctk.CTkButton(left_frame, text="🚀 Wooff!", width=180, command=lambda: process_selected(root, output, status_var, action_buttons, progress_frame, progress_bar, progress_label))
     btn_process.pack(side="top", pady=4, anchor="w")
     btn_new = ctk.CTkButton(left_frame, text="🆕 New Dogs", width=180, command=lambda: show_new_dogs(output, status_var, search_var.get()))
     btn_new.pack(side="top", pady=4, anchor="w")
@@ -447,10 +489,14 @@ def main():
     btn_quoke.pack(side="top", pady=4, anchor="w")
     btn_kesha.pack(side="top", pady=4, anchor="w")
 
-    # Progress bar (hidden by default)
-    progress_bar = ctk.CTkProgressBar(left_frame, width=180, mode='indeterminate')
-    progress_bar.pack(side="bottom", pady=(0, 20), anchor="w")
-    progress_bar.pack_forget()  # Hide initially
+    # Progress bar + percentage label (hidden by default)
+    progress_frame = ctk.CTkFrame(left_frame, fg_color="transparent")
+    progress_label = ctk.CTkLabel(progress_frame, text="0%", font=CTkFont(size=11))
+    progress_bar = ctk.CTkProgressBar(progress_frame, width=180, mode='determinate')
+    progress_label.pack(side="top", anchor="w")
+    progress_bar.pack(side="top", pady=(2, 0))
+    progress_frame.pack(side="bottom", pady=(0, 20), anchor="w")
+    progress_frame.pack_forget()  # Hide initially
 
     # Remove individual gender buttons
     # Main action buttons (removed)
@@ -472,7 +518,7 @@ def main():
     root.bind('<Control-n>', lambda e: show_new_dogs(output, status_var, search_var.get()))
     root.bind('<Control-h>', lambda e: show_gone_dogs(output, status_var, search_var.get()))
     root.bind('<Control-g>', lambda e: show_stayed_dogs(output, status_var, search_var.get()))
-    root.bind('<Control-w>', lambda e: process_selected(root, output, status_var, action_buttons, progress_bar))
+    root.bind('<Control-w>', lambda e: process_selected(root, output, status_var, action_buttons, progress_frame, progress_bar, progress_label))
     root.bind('<Control-f>', lambda e: search_entry.focus())
     root.bind('<Control-s>', lambda e: show_statistics_dashboard(root))
     root.bind('<Escape>', lambda e: (search_var.set(''), output.focus()))
