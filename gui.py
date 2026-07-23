@@ -177,6 +177,38 @@ def show_statistics_dashboard(root):
 
 
 
+def open_dog_folder(gender, dog):
+    folder_path = os.path.join(DOGS_PATH, gender, dog)
+    try:
+        if sys.platform.startswith('win'):
+            os.startfile(folder_path)
+        elif sys.platform == 'darwin':
+            subprocess.run(['open', folder_path])
+        else:
+            subprocess.run(['xdg-open', folder_path])
+    except Exception as e:
+        print(f"[ERROR] Could not open folder: {folder_path} ({e})")
+
+def insert_dog_link(output, emoji, gender, dog, tag_prefix, extra_tag):
+    """Insert a clickable dog name that opens its local folder on click."""
+    tag_name = f"{tag_prefix}_{gender}_{dog}"
+    output.insert(ctk.END, f"{emoji} ", (f"{tag_name}_emoji", tag_name, extra_tag, 'doglink'))
+    output.insert(ctk.END, f"{dog}\n", (f"{tag_name}_name", tag_name, extra_tag, 'doglink'))
+
+    def callback(event, g=gender, d=dog):
+        open_dog_folder(g, d)
+
+    output.tag_bind(f"{tag_name}_name", '<Enter>', lambda e, t=tag_name, d=dog: (
+        output.tag_remove('doglink_hover', '1.0', 'end'),
+        output.tag_add('doglink_hover', f"{e.widget.index('current').split('.')[0]}.{int(e.widget.index('current').split('.')[1])}", f"{e.widget.index('current').split('.')[0]}.{int(e.widget.index('current').split('.')[1])+len(d)}"),
+        output.configure(cursor='hand2')
+    ))
+    output.tag_bind(f"{tag_name}_name", '<Leave>', lambda e, t=tag_name: (
+        output.tag_remove('doglink_hover', '1.0', 'end'),
+        output.configure(cursor='')
+    ))
+    output.tag_bind(tag_name, '<Button-1>', callback)
+
 def show_new_dogs(output, status_var, search_term=""):
     set_status(status_var, "Showing new dogs for ALL")
     output.configure(state='normal')
@@ -199,30 +231,7 @@ def show_new_dogs(output, status_var, search_term=""):
             filtered_count += len(dogs_to_show)
             
             for dog in dogs_to_show:
-                tag_name = f"new_{gender}_{dog}"
-                output.insert(ctk.END, f"🐶 ", (f"{tag_name}_emoji", tag_name, 'new', 'doglink'))
-                output.insert(ctk.END, f"{dog}\n", (f"{tag_name}_name", tag_name, 'new', 'doglink'))
-                def callback(event, g=gender, d=dog):
-                    folder_path = os.path.join(DOGS_PATH, g, d)
-                    try:
-                        if sys.platform.startswith('win'):
-                            os.startfile(folder_path)
-                        elif sys.platform == 'darwin':
-                            subprocess.run(['open', folder_path])
-                        else:
-                            subprocess.run(['xdg-open', folder_path])
-                    except Exception as e:
-                        print(f"[ERROR] Could not open folder: {folder_path} ({e})")
-                output.tag_bind(f"{tag_name}_name", '<Enter>', lambda e, t=tag_name, d=dog: (
-                    output.tag_remove('doglink_hover', '1.0', 'end'),
-                    output.tag_add('doglink_hover', f"{e.widget.index('current').split('.')[0]}.{int(e.widget.index('current').split('.')[1])}", f"{e.widget.index('current').split('.')[0]}.{int(e.widget.index('current').split('.')[1])+len(d)}"),
-                    output.configure(cursor='hand2')
-                ))
-                output.tag_bind(f"{tag_name}_name", '<Leave>', lambda e, t=tag_name: (
-                    output.tag_remove('doglink_hover', '1.0', 'end'),
-                    output.configure(cursor='')
-                ))
-                output.tag_bind(tag_name, '<Button-1>', callback)
+                insert_dog_link(output, "🐶", gender, dog, "new", 'new')
         else:
             output.insert(ctk.END, "(None)\n", 'none')
         output.insert(ctk.END, "\n" + ("="*60) + "\n\n", 'section')
@@ -270,6 +279,42 @@ def show_gone_dogs(output, status_var, search_term=""):
     
     output.see(1.0)  # Scroll to top instead of bottom
     set_status(status_var, f"Found {filtered_count if search_term else total_happy} happy dogs" + (f" matching '{search_term}'" if search_term else ""))
+    output.configure(state='disabled')
+
+def show_stayed_dogs(output, status_var, search_term=""):
+    set_status(status_var, "Showing stayed dogs for ALL")
+    output.configure(state='normal')
+    output.delete(1.0, ctk.END)
+
+    # Statistics variables
+    total_stayed = 0
+    filtered_count = 0
+
+    for gender in dogsGender:
+        report_str = get_report_string(gender)
+        timestamp = get_report_timestamp(report_str)
+        stayed_dogs = parse_report_section(report_str, 'GEBLIEBEN:')
+        output.insert(ctk.END, f"==== Stayed Dogs for {gender} ====\n", 'header')
+        if timestamp:
+            output.insert(ctk.END, f"Report created: {timestamp}\n\n", 'timestamp')
+        if stayed_dogs:
+            total_stayed += len(stayed_dogs)
+            dogs_to_show = [dog for dog in stayed_dogs if search_term.lower() in dog.lower()] if search_term else stayed_dogs
+            filtered_count += len(dogs_to_show)
+
+            for dog in dogs_to_show:
+                insert_dog_link(output, "🏠", gender, dog, "stayed", 'stayed')
+        else:
+            output.insert(ctk.END, "(None)\n", 'none')
+        output.insert(ctk.END, "\n" + ("="*60) + "\n\n", 'section')
+    # Show statistics at the end
+    if search_term:
+        output.insert(ctk.END, f"\n🏠 Search Results: {filtered_count} dogs found matching '{search_term}' (out of {total_stayed} total stayed dogs)\n", 'stats')
+    else:
+        output.insert(ctk.END, f"\n🏠 Total Stayed Dogs: {total_stayed}\n", 'stats')
+
+    output.see(1.0)  # Scroll to top instead of bottom
+    set_status(status_var, f"Found {filtered_count if search_term else total_stayed} stayed dogs" + (f" matching '{search_term}'" if search_term else ""))
     output.configure(state='disabled')
 
 def show_report_gui(selected_gender, output, status_var):
@@ -381,9 +426,11 @@ def main():
     btn_new.pack(side="top", pady=4, anchor="w")
     btn_happy = ctk.CTkButton(left_frame, text="🎊 Happy Dogs", width=180, command=lambda: show_gone_dogs(output, status_var, search_var.get()))
     btn_happy.pack(side="top", pady=4, anchor="w")
+    btn_stayed = ctk.CTkButton(left_frame, text="🏠 Stayed Dogs", width=180, command=lambda: show_stayed_dogs(output, status_var, search_var.get()))
+    btn_stayed.pack(side="top", pady=4, anchor="w")
     btn_stats = ctk.CTkButton(left_frame, text="📊 Statistics", width=180, command=lambda: show_statistics_dashboard(root))
     btn_stats.pack(side="top", pady=4, anchor="w")
-    action_buttons = [btn_process, btn_new, btn_happy]
+    action_buttons = [btn_process, btn_new, btn_happy, btn_stayed]
     
     # Bind Enter key in search to trigger new dogs search
     search_entry.bind('<Return>', lambda e: show_new_dogs(output, status_var, search_var.get()))
@@ -414,7 +461,7 @@ def main():
     # ttk.Button(root, text="ALL", width=15, command=lambda: process_all(output, status_var)).pack(pady=5)
 
     # Keyboard shortcuts info
-    shortcuts_text = "⌨️ Shortcuts:\nCtrl+N: New Dogs\nCtrl+H: Happy Dogs\nCtrl+W: Wooff!\nCtrl+S: Statistics\nCtrl+F: Focus Search\nEsc: Clear Search"
+    shortcuts_text = "⌨️ Shortcuts:\nCtrl+N: New Dogs\nCtrl+H: Happy Dogs\nCtrl+G: Stayed Dogs\nCtrl+W: Wooff!\nCtrl+S: Statistics\nCtrl+F: Focus Search\nEsc: Clear Search"
     shortcuts_label = ctk.CTkLabel(left_frame, text=shortcuts_text, font=('Arial', 10), justify="left", text_color="#666666")
     shortcuts_label.pack(side="bottom", pady=(10, 5), anchor="w")
     
@@ -424,6 +471,7 @@ def main():
     # Bind keyboard shortcuts
     root.bind('<Control-n>', lambda e: show_new_dogs(output, status_var, search_var.get()))
     root.bind('<Control-h>', lambda e: show_gone_dogs(output, status_var, search_var.get()))
+    root.bind('<Control-g>', lambda e: show_stayed_dogs(output, status_var, search_var.get()))
     root.bind('<Control-w>', lambda e: process_selected(root, output, status_var, action_buttons, progress_bar))
     root.bind('<Control-f>', lambda e: search_entry.focus())
     root.bind('<Control-s>', lambda e: show_statistics_dashboard(root))
@@ -443,6 +491,7 @@ def main():
     output.tag_config('online', foreground='#bbbbbb')
     output.tag_config('new', foreground='#7CFC00')  # light green
     output.tag_config('gone', foreground='#FF6347') # light red
+    output.tag_config('stayed', foreground='#5dade2')  # light blue for stayed dogs
     output.tag_config('none', foreground='#dddddd')
     output.tag_config('timestamp', foreground='#999999')  # gray for timestamps
     output.tag_config('stats', foreground='#4169E1')  # royal blue for statistics
