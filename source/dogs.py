@@ -51,8 +51,13 @@ class Dog:
             # for both the description and the images (was fetched 3x before).
             soup = fetch_soup(self.url)
             try:
-                self.set_description(soup)
+                # Images MUST be extracted before the description: get_description
+                # mutates every <a> tag inside #page-content (replacing links with
+                # "text (url)"), and the image gallery is nested inside that same
+                # div. Running description-cleanup first destroys the <a href=...>
+                # wrappers around each photo before get_and_save_images can read them.
                 self.get_and_save_images(soup)
+                self.set_description(soup)
             finally:
                 soup.decompose()  # release the DOM immediately
         except Exception as e:
