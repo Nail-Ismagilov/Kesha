@@ -25,57 +25,63 @@ def _append_output(output, msg):
     output.see(ctk.END)
     output.configure(state='disabled')
 
-# Rough weight of each phase within one gender's slice of the progress bar.
-# "Creating new dogs" dominates real wall-clock time (network + image
-# downloads per dog), so it gets most of the budget; the rest are quick.
-LIST_WEIGHT = 0.05
-REPORT_WEIGHT = 0.05
-CREATE_WEIGHT = 0.70
-DELETE_WEIGHT = 0.20
+# Fraction of the bar reserved for the upfront scan pass (finding out how
+# many new dogs actually need downloading), before any real work starts.
+SCAN_WEIGHT = 0.05
+WORK_WEIGHT = 1.0 - SCAN_WEIGHT
 
-def process_gender(gender, log, progress):
-    """Backend work for one gender. Touches NO Tk widgets, so it is safe to run
-    on a worker thread; `log`/`progress` are thread-safe callbacks that marshal
-    text/progress updates to the UI on the main thread. `progress(fraction)`
-    reports 0..1 completion of THIS gender's work, updated per-dog (not just
-    once per phase) so it never sits frozen while many dogs/images download."""
+def process_gender(gender, dogList, log, on_dog_progress):
+    """Process one already-scanned gender. `on_dog_progress` is called once per
+    real unit of work completed (one new dog downloaded, or one adopted dog's
+    folder deleted) so the bar reflects actual work, not a fixed per-gender slice."""
     log(f"\nProcessing: {gender}\n")
-    log("creating dogs list\n")
-    dogList = Doglist(gender)
-    progress(LIST_WEIGHT)
-
     log("creating dogs report\n")
     create_report(dogList, gender)
-    progress(LIST_WEIGHT + REPORT_WEIGHT)
 
     log("creating new dogs\n")
-    total_pets = len(dogList.pets)
-    created_count = [0]
+    create_new_dogs(gender, dogList.pets, on_dog_done=on_dog_progress)
 
-    def on_dog_done():
-        created_count[0] += 1
-        frac = LIST_WEIGHT + REPORT_WEIGHT + CREATE_WEIGHT * (created_count[0] / total_pets)
-        progress(frac)
-
-    create_new_dogs(gender, dogList.pets, on_dog_done=on_dog_done if total_pets else None)
-    progress(LIST_WEIGHT + REPORT_WEIGHT + CREATE_WEIGHT)
-
-    happy = dogList.happy_dogs()
-    total_happy = len(happy)
-    for i, dog in enumerate(happy, start=1):
+    for dog in dogList.happy_dogs():
         delete_dog(gender, dog)
-        progress(LIST_WEIGHT + REPORT_WEIGHT + CREATE_WEIGHT + DELETE_WEIGHT * (i / total_happy))
+        on_dog_progress()
 
-    progress(1.0)
     log(f"Done with {gender}\n")
 
 def process_all(log, progress):
-    """progress(fraction) reports 0..1 completion across ALL genders."""
-    n = len(dogsGender)
-    for i, gender in enumerate(dogsGender):
-        def gender_progress(within_gender_fraction, i=i):
-            progress((i + within_gender_fraction) / n)
-        process_gender(gender, log, gender_progress)
+    """progress(fraction) reports 0..1 completion across the whole run.
+
+    Phase 1 scans every gender (one listing fetch + local diff each - cheap,
+    no downloads) to find out exactly how many new dogs need downloading and
+    how many adopted dogs need deleting. Phase 2 does that work, advancing the
+    bar per dog. A gender with nothing new to download (e.g. Rüden or Welpen
+    coming back empty) contributes nothing to the total instead of reserving
+    a fixed slice of the bar it never uses.
+    """
+    log("Checking all categories for new dogs...\n")
+    doglists = []
+    for i, gender in enumerate(dogsGender, start=1):
+        doglists.append((gender, Doglist(gender)))
+        progress(SCAN_WEIGHT * i / len(dogsGender))
+
+    total_new = sum(len(dl.new_dogs()) for _, dl in doglists)
+    total_happy = sum(len(dl.happy_dogs()) for _, dl in doglists)
+    total_work = total_new + total_happy
+    log(f"Found {total_new} new dog(s) to download, {total_happy} to remove.\n")
+
+    if not total_work:
+        progress(1.0)  # nothing to download or delete anywhere - done
+        for gender, dogList in doglists:
+            process_gender(gender, dogList, log, lambda: None)
+        return
+
+    done = [0]
+
+    def on_dog_progress():
+        done[0] += 1
+        progress(SCAN_WEIGHT + WORK_WEIGHT * (done[0] / total_work))
+
+    for gender, dogList in doglists:
+        process_gender(gender, dogList, log, on_dog_progress)
 
 def parse_report_section(report_text, section):
     # section: 'NEUE:' or 'ABGEHOLT:'

@@ -20,17 +20,18 @@ def create_new_dogs(gender, doggies=None, on_dog_done=None):
         # Skip "reist bald" dogs: Doglist excludes them from the online list, so
         # creating folders for them here would cause churn + false "adopted".
         if dog['spec'] in REIST_BALD:
-            if on_dog_done:
-                on_dog_done()
             continue
         doggy = Dog(dog, gender)
         if not doggy.dog_exist():
             print(f"doggy = {doggy.name} does not exist")
             doggy.create_dog()
+            # Only a genuinely new download counts as a unit of work - skipped
+            # (already-existing) dogs are near-instant and shouldn't inflate
+            # the "dogs left to download" total the progress bar is based on.
+            if on_dog_done:
+                on_dog_done()
         else:
             print(f"doggy = {doggy.name} exists")
-        if on_dog_done:
-            on_dog_done()
 
 def get_path(gender, name):
     path = f"{DOGS_PATH}/{gender}/{name}"
