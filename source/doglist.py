@@ -26,7 +26,6 @@ class Doglist:
         self._happy = [] if not self.internetList else [d for d in self.existingList if d not in internet]
         self._new = [d for d in self.internetList if d not in existing]
         self._left = [d for d in self.internetList if d in existing]
-        print(f"[DEBUG] {gender}: {len(self._new)} new, {len(self._happy)} adopted, {len(self._left)} stayed")
 
     def happy_dogs(self):
         # In existingList but not online (adopted / gone).

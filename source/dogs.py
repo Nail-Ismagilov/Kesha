@@ -43,7 +43,13 @@ class Dog:
         # self.existedList = existedList
 
     def create_dog(self):
-        print(f"Creating dog: {self.name}")
+        """Build the dog's folder (description + images).
+
+        Returns (ok, image_count) so callers can surface real per-dog outcomes
+        to the user instead of relying on invisible prints: ok=False means the
+        folder could not be built (partial folder removed), image_count == 0
+        means the description was saved but the photo gallery was missing.
+        """
         path = self.get_path()
         self.create_folder(path)
         try:
@@ -56,16 +62,18 @@ class Dog:
                 # "text (url)"), and the image gallery is nested inside that same
                 # div. Running description-cleanup first destroys the <a href=...>
                 # wrappers around each photo before get_and_save_images can read them.
-                self.get_and_save_images(soup)
+                images = self.get_and_save_images(soup)
                 self.set_description(soup)
             finally:
                 soup.decompose()  # release the DOM immediately
+            return True, images
         except Exception as e:
             # Never leave a half-built folder: dog_exist() only checks that the
             # folder exists, so a partial one would never be retried. Remove it
             # so the next run re-creates it cleanly, and don't abort the batch.
             print(f"[ERROR] Failed to create {self.name}: {e}; removing partial folder.")
             shutil.rmtree(path, ignore_errors=True)
+            return False, 0
 
     def delete_dog(self):
         path = self.get_path()
@@ -104,12 +112,35 @@ class Dog:
         else:
             raise TypeError("Input must be string or list")
 
+    def detect_sex(self, description):
+        """Best-effort sex from the scraped text, falling back to the category.
+
+        Category alone is wrong for Pflegestelle (mixed-sex fosters), which used
+        to make every foster dog female ("Süße ... sucht ihre Familie"). Prefer
+        an explicit marker in the description; fall back to the category; return
+        None only when genuinely unknown so the caller can stay neutral.
+        """
+        text = (description or "").lower()
+        if re.search(r"\brüde\b|\brüden\b|\bmännlich\b", text):
+            return "male"
+        if re.search(r"\bhündin\b|\bhündinnen\b|\bweiblich\b", text):
+            return "female"
+        if self.gender in ("Rüden", "Welpen_und_Junghunde"):
+            return "male"
+        if self.gender in ("Hündinen", "Welpen_Madchen"):
+            return "female"
+        return None
+
     def get_title(self, description):
-        is_male = self.gender in ['Rüden', 'Welpen_und_Junghunde']
-        gender_key = 'male' if is_male else 'female'
-        adj = random.choice(adjectives[gender_key])
-        ending = random.choice(endings[gender_key])
-        return f"{adj} {self.extract_name(description)} {ending}\n"
+        name = self.extract_name(description)
+        sex = self.detect_sex(description)
+        if sex is None:
+            # Unknown sex (e.g. an undetectable Pflegestelle dog): neutral phrasing
+            # beats guessing the wrong grammatical gender.
+            return f"{name} sucht ein neues Zuhause\n"
+        adj = random.choice(adjectives[sex])
+        ending = random.choice(endings[sex])
+        return f"{adj} {name} {ending}\n"
 
     def set_description(self, soup):
         description = self.get_description(soup)  # parse once, reuse below
@@ -126,19 +157,22 @@ class Dog:
             for word in file:
                 word = re.sub(r"\bName\b", clean_name, word)
                 text_arr.append(word)
-        with open(f"{self.get_path()}/{self.name}.txt", "w+", encoding="utf-8") as composed_text:
+        with open(os.path.join(self.get_path(), f"{self.name}.txt"), "w+", encoding="utf-8") as composed_text:
             for line in text_arr:
                 composed_text.write(line)
 
     def get_and_save_images(self, soup):
+        """Download the detail-page gallery. Returns the number of images found
+        (0 when the gallery is missing) so the caller can warn about photo-less
+        folders instead of the failure vanishing into stdout."""
         table = soup.find('div', attrs = {'class':'gal-container'})
         if table is None:
-            print(f"[WARN] No image gallery for {self.name}")
-            return
+            return 0
         counter = 0
         for line in table.findAll('div',attrs={'class':'img-box-shadow'}):
             counter += 1
             self.save_image(line.a['href'], counter)
+        return counter
 
     def save_image(self, image_url, counter):
         try:
@@ -151,7 +185,7 @@ class Dog:
                     # Don't persist a 404/redirect HTML body as a fake .jpg.
                     print(f"[WARN] Skipping non-image response for {self.name}{counter} ({ctype})")
                     return
-                with open(f"{self.get_path()}/{self.name}{counter}.jpg", 'wb') as handler:
+                with open(os.path.join(self.get_path(), f"{self.name}{counter}.jpg"), 'wb') as handler:
                     for chunk in resp.iter_content(IMAGE_CHUNK_SIZE):
                         handler.write(chunk)
         except Exception as e:
@@ -170,8 +204,7 @@ class Dog:
         return process
 
     def get_path(self):
-        path = f"{DOGS_PATH}/{self.gender}/{self.name}"
-        return path
+        return os.path.join(DOGS_PATH, self.gender, self.name)
 
     def del_path(self, path):
         # Reuse manage_folder's safety-guarded, OneDrive/Windows-retry-aware
@@ -181,9 +214,13 @@ class Dog:
 
     def extract_name(self, text):
         # Use regex to find the line that starts with "Name:" and extract the name
-        match = re.search(r"Name: (.+)", text)
+        match = re.search(r"Name:\s*(.+)", text)
         if match:
-            return match.group(1)
+            name = match.group(1).strip()
+            # Drop trailing annotations like "Bella (reserviert)" or "Bella | ..."
+            # so the generated title reads "Süße Bella sucht ..." not the whole line.
+            name = re.split(r"\s*[(|]", name)[0].strip()
+            return name or self.name
         # Fall back to the known name so titles never contain the word "None".
         return self.name
 

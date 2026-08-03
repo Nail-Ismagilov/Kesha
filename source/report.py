@@ -1,6 +1,6 @@
-from source.dogs import *
+import os
 from source.doglist import Doglist
-from source.global_defines import REPORT_PATH
+from source.global_defines import REPORT_PATH, gender_display
 from source.manage_folder import ensure_folder_exists
 from datetime import datetime
 
@@ -37,26 +37,15 @@ def create_report(dogsList: Doglist, gender: str):
         for dog in  dogsList.new_dogs():
             file.write("    * " + dog + "\n")
 
-def clean_report():
-    """ 
-    """
-    reports = [f for f in os.listdir(REPORT_PATH) if os.path.isfile(os.path.join(REPORT_PATH, f))]
-    for report in reports:
-        with open(os.path.join(REPORT_PATH, report), "r+") as file:
-            file.truncate(0)
-
 def show_report(gender):
-    file_path = f"{REPORT_PATH}/{gender}_report.txt"
+    file_path = os.path.join(REPORT_PATH, f"{gender}_report.txt")
     ensure_folder_exists(REPORT_PATH)
     try:
-        with open(file_path, 'r') as file:
-            # Read the content of the file
+        with open(file_path, 'r', encoding='utf-8') as file:
             file_content = file.read()
-            
-            # Print the content
-            print(f"{gender}:\n", file_content)
-    
+        # Single f-string (the old two-arg print injected a stray leading space).
+        print(f"\n{gender_display(gender)}:\n{file_content}")
     except FileNotFoundError:
-        print(f"File '{file_path}' not found.")
+        print(f"Kein Report für {gender_display(gender)} gefunden.")
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"Fehler beim Lesen des Reports: {e}")
