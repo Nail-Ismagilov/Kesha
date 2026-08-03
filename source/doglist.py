@@ -1,32 +1,43 @@
-from source.dogs_from_url import Dogs_from_URL
 from source.dogs_from_PC import Dogs_from_PC
+from source.dogs_from_url import REIST_BALD
+from source.elements_from_url import urls, get_pets_from_url
 
 class Doglist:
     def __init__(self, gender):
-        print (f"[DEBUG] creating doglist from PC for gender: {gender}")
-        self.existingList = Dogs_from_PC().dog_list(gender) 
-        print (f"[DEBUG] existingList for {gender}: {self.existingList}")
-        print (f"[DEBUG] creating doglist from URL for gender: {gender}")
-        self.internetList = Dogs_from_URL().dog_list(gender)
-        print (f"[DEBUG] internetList for {gender}: {self.internetList}")
-        gone = [dog for dog in self.existingList if dog not in self.internetList]
-        new = [dog for dog in self.internetList if dog not in self.existingList]
-        print(f"[DEBUG] gone dogs for {gender}: {gone}")
-        print(f"[DEBUG] new dogs for {gender}: {new}")
-            # existingList = Dogs_from_PC() 
-            # fromUrl = Dogs_from_URL()
+        self.gender = gender
+        self.existingList = Dogs_from_PC().dog_list(gender)
+        # Scrape the listing page ONCE and keep the raw pet dicts so
+        # create_new_dogs can reuse them instead of re-fetching the page.
+        self.pets = get_pets_from_url(urls[gender])
+        # Online dogs, excluding "reist bald" (travelling) entries. Lowercased
+        # and sorted to match Dogs_from_PC's local-folder names (case can
+        # differ between the scraped slug and the on-disk folder name).
+        self.internetList = sorted(
+            p['name'].lower() for p in self.pets if p['spec'] not in REIST_BALD
+        )
+
+        # Compute each diff exactly once with O(1) set membership, preserving
+        # original order, and cache the results on the instance.
+        existing = set(self.existingList)
+        internet = set(self.internetList)
+        # Safety guard: if the scrape produced nothing (site down, layout change,
+        # empty category), treat it as "unknown" and mark NOTHING as adopted, so
+        # a transient failure can never wipe every local folder.
+        self._happy = [] if not self.internetList else [d for d in self.existingList if d not in internet]
+        self._new = [d for d in self.internetList if d not in existing]
+        self._left = [d for d in self.internetList if d in existing]
 
     def happy_dogs(self):
-        # Dogs that are in existingList but not in internetList (gone)
-        return [dog for dog in self.existingList if dog not in self.internetList]
-    
+        # In existingList but not online (adopted / gone).
+        return self._happy
+
     def new_dogs(self):
-        # Dogs that are in internetList but not in existingList (new)
-        return [dog for dog in self.internetList if dog not in self.existingList]
-    
+        # Online but not local yet (new).
+        return self._new
+
     def left_dogs(self):
-        # Dogs that are in both lists (still present)
-        return [dog for dog in self.internetList if dog in self.existingList]
+        # In both lists (still available).
+        return self._left
 
 
 # print(existingList.dog_list())

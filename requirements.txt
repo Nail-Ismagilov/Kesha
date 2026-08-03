@@ -1,4 +1,6 @@
 # Python 3.7+
 requests
-beautifulsoup4 
-customtkinter 
+beautifulsoup4
+soupsieve        # BeautifulSoup CSS selector support (silences the runtime warning)
+customtkinter
+send2trash       # recoverable folder deletion (move to trash instead of erase)
