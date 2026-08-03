@@ -595,7 +595,7 @@ def main():
         side="top", anchor="w", pady=(0, 2))
     btn_check = ctk.CTkButton(left_frame, text="🔍 Änderungen prüfen", width=SIDEBAR_W, height=40)
     btn_check.pack(side="top", pady=3, anchor="w")
-    btn_sync = ctk.CTkButton(left_frame, text="🔄 Aktualisieren", width=SIDEBAR_W, height=40,
+    btn_sync = ctk.CTkButton(left_frame, text="🐶 Wooff!", width=SIDEBAR_W, height=40,
                              fg_color=DANGER_FG, hover_color=DANGER_HOVER)
     btn_sync.pack(side="top", pady=3, anchor="w")
 
