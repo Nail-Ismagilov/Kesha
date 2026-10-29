@@ -131,12 +131,14 @@ def compare(old, new):
     return changes
 
 
-def check_dog_changes(dog):
+def check_dog_changes(dog, dry_run=False):
     """Check one already-existing Dog against its stored fingerprint.
 
-    Returns {} (unchanged), {"baseline": True} (first run, fingerprint written)
-    or a dict as described in compare(). Only fingerprint.json is written;
-    the dog's description file and photos are never touched.
+    Returns {} (unchanged), {"baseline": True} (no fingerprint yet) or a dict
+    as described in compare(). Only fingerprint.json is ever written; the dog's
+    description file and photos are never touched. With dry_run=True nothing at
+    all is written (not even the first-run baseline), so the GUI preview stays
+    strictly read-only.
     """
     soup = fetch_soup(dog.url)
     try:
@@ -170,9 +172,43 @@ def check_dog_changes(dog):
         "images": images,
     }
     if old is None:
-        save_fp(path, new)
+        if not dry_run:
+            save_fp(path, new)
         return {"baseline": True}
     changes = compare(old, new)
-    if changes:
+    if changes and not dry_run:
         save_fp(path, new)
     return changes
+
+
+def find_changed_dogs(gender, pets, log=None):
+    """Read-only scan of one category for the GUI preview.
+
+    `pets` is the raw listing already scraped by Doglist. Only dogs that exist
+    locally are checked (new dogs have nothing to compare against). Returns
+    ({dog_name: changes}, number_of_dogs_without_baseline). One failing dog
+    never aborts the scan; it is reported through `log` and skipped.
+    """
+    # Imported lazily to avoid import cycles with manage_folder / dogs.
+    from source.dogs import Dog
+    from source.dogs_from_url import REIST_BALD
+
+    changed = {}
+    baseline = 0
+    for pet in pets:
+        if pet["spec"] in REIST_BALD:
+            continue
+        dog = Dog(pet, gender)
+        if not dog.dog_exist():
+            continue
+        try:
+            changes = check_dog_changes(dog, dry_run=True)
+        except Exception as e:
+            if log:
+                log(f"  ⚠ {dog.name}: Änderungsprüfung fehlgeschlagen ({e})\n")
+            continue
+        if "baseline" in changes:
+            baseline += 1
+        elif changes:
+            changed[dog.name] = changes
+    return changed, baseline
