@@ -4,3 +4,5 @@ beautifulsoup4
 soupsieve        # BeautifulSoup CSS selector support (silences the runtime warning)
 customtkinter
 send2trash       # recoverable folder deletion (move to trash instead of erase)
+pillow           # image decoding for change detection
+imagehash        # perceptual hashes: detect changed photos despite re-encoding
