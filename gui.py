@@ -4,6 +4,7 @@ from tkinter import messagebox
 from source.doglist import Doglist
 from source.manage_folder import create_new_dogs, delete_dog
 from source.report import create_report
+from source.change_detector import find_changed_dogs
 from source.global_defines import DOGS_PATH, gender_display
 import source.report as report_module
 import os
@@ -16,8 +17,10 @@ dogsGender = ["Hündinen", "Rüden", "Welpen_Madchen", "Welpen_und_Junghunde", "
 ALL_LABEL = "Alle"
 
 # Fraction of the bar reserved for the upfront scan pass (finding out how
-# many new dogs actually need downloading), before any real work starts.
-SCAN_WEIGHT = 0.05
+# many new dogs actually need downloading, and which existing dogs changed),
+# before any real work starts. The scan now also fetches every existing dog's
+# detail page for the change check, hence the larger share.
+SCAN_WEIGHT = 0.15
 WORK_WEIGHT = 1.0 - SCAN_WEIGHT
 
 # Proportional deletion guard: if a scrape would delete more than this fraction
@@ -119,6 +122,10 @@ class GenderPlan:
         self.happy = doglist.happy_dogs() if doglist else []
         self.existing = doglist.existingList if doglist else []
         self.online_count = len(doglist.internetList) if doglist else 0
+        # Existing dogs whose description/photos changed since the last run
+        # ({name: changes}) and how many existing dogs have no fingerprint yet.
+        self.changed = {}
+        self.baseline = 0
         # Proportional guard: block deletions that look like a broken scrape.
         self.delete_blocked = bool(
             doglist
@@ -129,13 +136,20 @@ class GenderPlan:
 
 
 def scan_all(log, progress=None):
-    """Scan every category (listing fetch + local diff). No folders are written
-    or deleted. Each category is isolated: one failing scrape doesn't abort the
-    rest, it just yields a plan flagged with an error."""
+    """Scan every category (listing fetch + local diff + read-only change check
+    of existing dogs). No folders or fingerprints are written. Each category is
+    isolated: one failing scrape doesn't abort the rest, it just yields a plan
+    flagged with an error."""
     plans = []
     for i, gender in enumerate(dogsGender, start=1):
         try:
-            plans.append(GenderPlan(gender, doglist=Doglist(gender)))
+            plan = GenderPlan(gender, doglist=Doglist(gender))
+            try:
+                plan.changed, plan.baseline = find_changed_dogs(
+                    gender, plan.doglist.pets, log)
+            except Exception as e:
+                log(f"[WARNUNG] {gender_display(gender)}: Änderungsprüfung fehlgeschlagen ({e})\n")
+            plans.append(plan)
         except Exception as e:
             log(f"[FEHLER] {gender_display(gender)}: Abruf fehlgeschlagen ({e})\n")
             plans.append(GenderPlan(gender, error=str(e)))
@@ -144,10 +158,17 @@ def scan_all(log, progress=None):
     return plans
 
 
+def count_changes(plans):
+    """Return (n_changed, n_without_baseline) over all healthy plans."""
+    return (sum(len(p.changed) for p in plans if not p.error),
+            sum(p.baseline for p in plans if not p.error))
+
+
 def _new_summary():
     return {
         "created": 0, "failed": 0, "no_images": 0,
         "deleted": 0, "delete_failed": 0, "delete_skipped": 0, "scrape_failed": 0,
+        "changed": 0, "changed_names": [],
     }
 
 
@@ -174,12 +195,16 @@ def apply_all(plans, log, progress):
             continue
 
         log(f"\n{display}:\n")
+        summary["changed"] += len(p.changed)
+        summary["changed_names"].extend(f"{display}: {n}" for n in p.changed)
         # Only overwrite the report when the scrape is trustworthy. A suspected
         # partial scrape keeps its previous (good) report instead of asserting
         # stale/wrong data with a fresh timestamp.
         if not p.delete_blocked:
             create_report(p.doglist, p.gender)
 
+        # create_new_dogs also re-checks existing dogs and saves their new
+        # fingerprints (and writes first-run baselines).
         c, f, ni = create_new_dogs(p.gender, p.doglist.pets, on_dog_done=tick, log=log)
         summary["created"] += c
         summary["failed"] += f
@@ -216,18 +241,21 @@ def summarize_plans(plans):
             lines.append(f"⚠ {d}: Abruf fehlgeschlagen")
             continue
         n_new += len(p.new)
+        changed_txt = f", ✎{len(p.changed)} geändert" if p.changed else ""
         if p.delete_blocked:
             n_blocked += len(p.happy)
             lines.append(f"{d}: +{len(p.new)} neu, {len(p.happy)} abgeholt "
-                         f"⚠ (Löschen gesperrt)")
+                         f"⚠ (Löschen gesperrt){changed_txt}")
         else:
             n_del += len(p.happy)
-            lines.append(f"{d}: +{len(p.new)} neu, −{len(p.happy)} abgeholt")
+            lines.append(f"{d}: +{len(p.new)} neu, −{len(p.happy)} abgeholt{changed_txt}")
     return lines, n_new, n_del, n_blocked, n_error
 
 
 def _summary_line(summary):
     parts = [f"Erstellt: {summary['created']}", f"Gelöscht: {summary['deleted']}"]
+    if summary.get("changed"):
+        parts.append(f"Geändert: {summary['changed']}")
     if summary["failed"]:
         parts.append(f"Fehlgeschlagen: {summary['failed']}")
     if summary["no_images"]:
@@ -404,7 +432,15 @@ def _render_preview(output, plans):
             for name in p.happy:
                 suffix = " (gesperrt)" if p.delete_blocked else ""
                 output.insert(ctk.END, f"  🗑 {name}{suffix}\n", tag)
-        if not p.new and not p.happy:
+        for name, ch in p.changed.items():
+            what = ", ".join(label for key, label in (("description", "Beschreibung"),
+                                                      ("images", "Bilder")) if key in ch)
+            output.insert(ctk.END, f"  ✎ {name}: {what} geändert\n", "stayed")
+        if p.baseline:
+            output.insert(ctk.END,
+                          f"  ℹ {p.baseline} Hund(e) ohne Referenzstand – "
+                          f"wird beim Aktualisieren angelegt.\n", "none")
+        if not p.new and not p.happy and not p.changed:
             output.insert(ctk.END, "  (keine Änderungen)\n", "none")
         if p.delete_blocked:
             output.insert(ctk.END,
@@ -711,7 +747,10 @@ def main():
                 return
             _render_preview(output, plans)
             _, n_new, n_del, n_block, n_err = summarize_plans(plans)
+            n_changed, _n_base = count_changes(plans)
             msg = f"Prüfung: +{n_new} neu, −{n_del} abgeholt"
+            if n_changed:
+                msg += f", ✎{n_changed} geändert"
             if n_block:
                 msg += f", {n_block} gesperrt"
             if n_err:
@@ -729,6 +768,11 @@ def main():
         if summary is not None:
             output.insert(ctk.END, "Zusammenfassung\n", "header")
             output.insert(ctk.END, _summary_line(summary) + "\n\n", "stats")
+            if summary.get("changed_names"):
+                output.insert(ctk.END, "Geänderte Hunde (Beschreibung/Bilder)\n", "header")
+                for changed_name in summary["changed_names"]:
+                    output.insert(ctk.END, f"  ✎ {changed_name}\n", "stayed")
+                output.insert(ctk.END, "\n")
             set_status(status_var, _summary_line(summary))
         else:
             output.insert(ctk.END, "Mit Fehler beendet.\n\n", "gone")
@@ -771,7 +815,11 @@ def main():
                 set_status(status_var, "Abruf fehlgeschlagen.")
                 return
             lines, n_new, n_del, n_block, n_err = summarize_plans(plans)
-            if n_new == 0 and n_del == 0 and n_block == 0:
+            n_changed, n_base = count_changes(plans)
+            # Changed dogs / missing baselines still need an apply pass so the
+            # new fingerprints get stored, even when nothing is created/deleted.
+            if (n_new == 0 and n_del == 0 and n_block == 0
+                    and n_changed == 0 and n_base == 0):
                 set_busy(False)
                 _render_preview(output, plans)
                 set_status(status_var, "Keine Änderungen.")
