@@ -54,7 +54,8 @@ def _summary(old, new):
     return f"+{added} / -{removed} Zeilen"
 
 
-def check_description(dog, page, store):
+def check_description(dog, page, ctx):
+    store = ctx.store
     new_text = page.description
     new_hash = text_hash(new_text)
     old = store.get_description(dog.key)

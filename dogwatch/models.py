@@ -3,16 +3,22 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class DogRef:
-    """One dog to check. `key` must be unique and stable (e.g. "Rüden/benny")."""
+    """One dog to check.
+
+    key     unique and stable (e.g. "Rüden/benny")
+    name    the dog's name as used for its files: photo n is <folder>/<name>n.jpg
+    url     detail page
+    folder  local folder of the dog; the photo checks are skipped if empty
+    """
     key: str
     name: str
     url: str
-    folder: str = ""   # local folder of the dog (used by the photo checks later)
+    folder: str = ""
 
 
 @dataclass(frozen=True)
 class Finding:
-    """kind: description | price | baseline | error"""
+    """kind: description | price | first_photo | baseline | warning | error"""
     dog: DogRef
     kind: str
     detail: str = ""
@@ -20,7 +26,8 @@ class Finding:
 
 @dataclass
 class RunResult:
-    findings: list = field(default_factory=list)   # description / price changes
+    findings: list = field(default_factory=list)   # real changes
     checked: int = 0
     baselined: int = 0                              # dogs seen for the first time
-    errors: list = field(default_factory=list)      # Finding(kind="error")
+    warnings: list = field(default_factory=list)    # a check could not decide (Finding)
+    errors: list = field(default_factory=list)      # a dog could not be checked (Finding)

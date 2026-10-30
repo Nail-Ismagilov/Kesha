@@ -1,6 +1,7 @@
 import unittest
 
 from dogwatch.checks.description import check_description, parse_price, text_hash
+from dogwatch.context import Context
 from dogwatch.models import DogRef
 from dogwatch.page import parse_page
 from dogwatch.runner import run
@@ -55,10 +56,10 @@ class PageParsing(unittest.TestCase):
 
 class DescriptionCheck(unittest.TestCase):
     def setUp(self):
-        self.store = Store()
+        self.ctx = Context(Store())
 
     def run_check(self, html):
-        return check_description(DOG, parse_page(html), self.store)
+        return check_description(DOG, parse_page(html), self.ctx)
 
     def test_baseline_then_unchanged(self):
         self.assertEqual([f.kind for f in self.run_check(page())], ["baseline"])
@@ -99,19 +100,19 @@ class Layouts(unittest.TestCase):
     def test_label_and_amount_in_separate_paragraphs(self):
         a = '<div id="page-content"><p>Schutzgebühr:</p><p>490 EUR</p><p>Text.</p></div>'
         b = '<div id="page-content"><p>Schutzgebühr:</p><p>590 EUR</p><p>Text.</p></div>'
-        store = Store()
-        check_description(DOG, parse_page(a), store)
-        f = check_description(DOG, parse_page(b), store)
+        ctx = Context(Store())
+        check_description(DOG, parse_page(a), ctx)
+        f = check_description(DOG, parse_page(b), ctx)
         self.assertEqual([(x.kind, x.detail) for x in f], [("price", "490 \u2192 590 EUR")])
 
     def test_price_removed_and_added(self):
         with_price = '<div id="page-content"><p>Schutzgebühr: 490 EUR</p><p>Text.</p></div>'
         without = '<div id="page-content"><p>Text.</p></div>'
-        store = Store()
-        check_description(DOG, parse_page(with_price), store)
-        f = check_description(DOG, parse_page(without), store)
+        ctx = Context(Store())
+        check_description(DOG, parse_page(with_price), ctx)
+        f = check_description(DOG, parse_page(without), ctx)
         self.assertEqual([(x.kind, x.detail) for x in f], [("price", "490 EUR \u2192 kein Preis")])
-        f = check_description(DOG, parse_page(with_price), store)
+        f = check_description(DOG, parse_page(with_price), ctx)
         self.assertEqual([(x.kind, x.detail) for x in f], [("price", "kein Preis \u2192 490 EUR")])
 
     def test_inline_markup_keeps_price_on_one_line(self):
