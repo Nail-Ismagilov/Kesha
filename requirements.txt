@@ -4,3 +4,4 @@ beautifulsoup4
 soupsieve        # BeautifulSoup CSS selector support (silences the runtime warning)
 customtkinter
 send2trash       # recoverable folder deletion (move to trash instead of erase)
+pillow           # optional: dogwatch treats a re-encoded copy of the same photo as unchanged

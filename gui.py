@@ -4,6 +4,8 @@ from tkinter import messagebox
 from source.doglist import Doglist
 from source.manage_folder import create_new_dogs, delete_dog
 from source.report import create_report
+from source.dogs_from_url import REIST_BALD
+from source.dogwatch_adapter import run_dogwatch, parse_changed_entries
 from source.global_defines import DOGS_PATH, gender_display
 import source.report as report_module
 import os
@@ -384,6 +386,57 @@ def show_stayed_dogs(output, status_var, search_term="", gender_filter="ALL"):
                   search_term, gender_filter)
 
 
+def show_changed_dogs(output, status_var, search_term="", gender_filter="ALL"):
+    """Dogs dogwatch found changed (description / price / first photo / photo
+    count), each with its reasons. The dog is still in the shelter, so the name
+    is clickable."""
+    _configure_output_tags(output)
+    output.configure(state="normal")
+    output.delete(1.0, ctk.END)
+
+    genders = dogsGender if gender_filter == "ALL" else [gender_filter]
+    total = 0
+    shown = 0
+    have_report = False
+    for gender in genders:
+        report_str = get_report_string(gender)
+        if not report_str.startswith("Kein Report"):
+            have_report = True
+        timestamp = get_report_timestamp(report_str)
+        entries = parse_changed_entries(report_str)
+        output.insert(ctk.END, f"Geänderte Hunde – {gender_display(gender)}\n", "header")
+        if timestamp:
+            output.insert(ctk.END, f"Stand: {timestamp}\n", "timestamp")
+        total += len(entries)
+        to_show = ([e for e in entries if search_term.lower() in e[0].lower()]
+                   if search_term else entries)
+        shown += len(to_show)
+        if to_show:
+            for name, reason in to_show:
+                insert_dog_link(output, "📝", gender, name)
+                if reason:
+                    output.insert(ctk.END, f"      → {reason}\n", "stayed")
+        else:
+            output.insert(ctk.END, "  (keine Treffer)\n" if entries else "  (keine)\n", "none")
+        output.insert(ctk.END, "\n")
+
+    if not have_report:
+        output.insert(ctk.END,
+                      "\nNoch keine Daten. Führe „🐶 Wooff!“ aus; die Änderungsprüfung läuft "
+                      "danach im Hintergrund.\n", "none")
+    elif search_term:
+        output.insert(ctk.END, f"\n📊 {shown} von {total} Treffer für „{search_term}“\n", "stats")
+    else:
+        output.insert(ctk.END, f"\n📊 Gesamt: {total}\n", "stats")
+
+    output.see(1.0)
+    output.configure(state="disabled")
+    if search_term:
+        set_status(status_var, f"{shown} von {total} für „{search_term}“ (Geänderte Hunde)")
+    else:
+        set_status(status_var, f"{total} × Geänderte Hunde")
+
+
 def _render_preview(output, plans):
     """Read-only preview of what a run WOULD change (nothing is written)."""
     _configure_output_tags(output)
@@ -614,6 +667,8 @@ def main():
     btn_happy.pack(side="top", pady=3, anchor="w")
     btn_stayed = ctk.CTkButton(left_frame, text="🏠 Geblieben", width=SIDEBAR_W)
     btn_stayed.pack(side="top", pady=3, anchor="w")
+    btn_changed = ctk.CTkButton(left_frame, text="📝 Geänderte", width=SIDEBAR_W)
+    btn_changed.pack(side="top", pady=3, anchor="w")
     btn_stats = ctk.CTkButton(left_frame, text="📊 Statistik", width=SIDEBAR_W)
     btn_stats.pack(side="top", pady=3, anchor="w")
 
@@ -642,7 +697,8 @@ def main():
                              fg_color=("gray70", "gray30"), hover_color=("gray60", "gray40"))
     btn_exit.pack(side="bottom", pady=(8, 0), anchor="w")
     shortcuts_text = ("⌨️  F5 Prüfen · Strg+N Neue · Strg+H Abgeholt\n"
-                      "Strg+G Geblieben · Strg+T Statistik · Strg+F Suche · Esc leeren")
+                      "Strg+G Geblieben · Strg+E Geänderte\n"
+                      "Strg+T Statistik · Strg+F Suche · Esc leeren")
     ctk.CTkLabel(left_frame, text=shortcuts_text, font=CTkFont(family="Arial", size=10),
                  justify="left", text_color=CAPTION_COLOR).pack(side="bottom", pady=(10, 4), anchor="w")
 
@@ -659,13 +715,22 @@ def main():
     _configure_output_tags(output)
 
     # --- State & orchestration ------------------------------------------- #
-    state = {"processing": False, "view": None}
-    all_controls = [btn_check, btn_sync, btn_new, btn_happy, btn_stayed, btn_stats,
-                    btn_quoka, btn_kesha, category_menu, btn_clear, btn_exit, search_entry]
+    # processing = the scan/apply run is active; every control is locked.
+    # bg         = the dogwatch change check runs in the background; only the
+    #              two buttons that could collide with it are locked.
+    state = {"processing": False, "bg": False, "view": None}
+    all_controls = [btn_check, btn_sync, btn_new, btn_happy, btn_stayed, btn_changed,
+                    btn_stats, btn_quoka, btn_kesha, category_menu, btn_clear,
+                    btn_exit, search_entry]
+    bg_locked_controls = [btn_check, btn_sync]
 
     def set_busy(busy):
         state["processing"] = busy
         set_buttons_state(all_controls, ctk.DISABLED if busy else ctk.NORMAL)
+
+    def set_bg(active):
+        state["bg"] = active
+        set_buttons_state(bg_locked_controls, ctk.DISABLED if active else ctk.NORMAL)
 
     def show_progress():
         _set_progress(progress_bar, progress_label, 0)
@@ -695,8 +760,56 @@ def main():
             root.after(0, lambda: on_done(plans))
         threading.Thread(target=worker, daemon=True).start()
 
+    # --- Background change check (dogwatch) ------------------------------ #
+    def on_change_progress(done, total):
+        def update():
+            _set_progress(progress_bar, progress_label, (done / total) if total else 1.0)
+            set_status(status_var,
+                       f"Prüfe Beschreibung, Preis & Fotos bestehender Hunde … {done}/{total}")
+        root.after(0, update)
+
+    def finish_changes(summary, error=None):
+        hide_progress()
+        set_bg(False)
+        if error:
+            set_status(status_var, f"Änderungsprüfung abgebrochen: {error}")
+            return
+        n = summary.n_changed
+        msg = (f"Änderungsprüfung fertig: {n} Hund(e) mit Änderungen – siehe „📝 Geänderte“."
+               if n else "Änderungsprüfung fertig: keine Änderungen an bestehenden Hunden.")
+        if summary.errors:
+            msg += f" · {len(summary.errors)} Seite(n) nicht prüfbar"
+        if summary.warnings:
+            msg += f" · {len(summary.warnings)} Warnung(en)"
+        set_status(status_var, msg + f" ({summary.seconds:.0f} s)")
+        btn_changed.configure(text=f"📝 Geänderte ({n})" if n else "📝 Geänderte")
+        if state["view"] is show_changed_dogs:
+            refresh_view()
+
+    def start_change_pipeline(plans):
+        """Run dogwatch on a daemon thread; the GUI stays responsive."""
+        if state["bg"]:
+            return
+        set_bg(True)
+        show_progress()
+        set_status(status_var, "Prüfe Beschreibung, Preis & Fotos bestehender Hunde …")
+
+        def worker():
+            try:
+                summary = run_dogwatch(plans, dogs_path=DOGS_PATH,
+                                       report_path=report_module.REPORT_PATH,
+                                       reist_bald=REIST_BALD, on_progress=on_change_progress)
+            except Exception as e:
+                msg = str(e)
+                root.after(0, lambda: finish_changes(None, msg))
+                return
+            root.after(0, lambda: finish_changes(summary))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    # --- Scan / apply ------------------------------------------------------ #
     def do_check():
-        if state["processing"]:
+        if state["processing"] or state["bg"]:
             return
         set_busy(True)
         clear_output()
@@ -720,7 +833,7 @@ def main():
 
         scan_async(after)
 
-    def finish_apply(summary):
+    def finish_apply(summary, plans):
         hide_progress()
         set_busy(False)
         output.configure(state="normal")
@@ -738,6 +851,9 @@ def main():
             output.insert(ctk.END, "\n" + ("=" * 60) + "\n\n", "section")
         output.see(1.0)
         output.configure(state="disabled")
+        # Scan/apply is done and the UI is unlocked again -> start the change check.
+        if summary is not None:
+            start_change_pipeline(plans)
 
     def run_apply(plans):
         set_busy(True)
@@ -752,12 +868,12 @@ def main():
                 summary = apply_all(plans, log, set_fraction)
             except Exception as e:
                 root.after(0, lambda: _append_output(output, f"\n[FEHLER] {e}\n"))
-            root.after(0, lambda: finish_apply(summary))
+            root.after(0, lambda: finish_apply(summary, plans))
 
         threading.Thread(target=worker, daemon=True).start()
 
     def do_sync():
-        if state["processing"]:
+        if state["processing"] or state["bg"]:
             return
         set_busy(True)
         clear_output()
@@ -772,9 +888,11 @@ def main():
                 return
             lines, n_new, n_del, n_block, n_err = summarize_plans(plans)
             if n_new == 0 and n_del == 0 and n_block == 0:
+                # Nothing to create/delete: go straight to the change check.
                 set_busy(False)
                 _render_preview(output, plans)
-                set_status(status_var, "Keine Änderungen.")
+                set_status(status_var, "Keine neuen/abgeholten Hunde.")
+                start_change_pipeline(plans)
                 return
             # Deletions require explicit confirmation; pure creations proceed directly.
             if n_del > 0:
@@ -816,6 +934,9 @@ def main():
                 "Bitte warten",
                 "Ein Vorgang läuft noch. Bitte warten, bis er abgeschlossen ist.")
             return
+        # The background change check may still be running: it is a daemon
+        # thread and dogwatch only writes its own database and a report section
+        # (atomically), so closing is safe; it simply runs again next time.
         root.destroy()
 
     # --- Wire up ---------------------------------------------------------- #
@@ -824,6 +945,7 @@ def main():
     btn_new.configure(command=lambda: run_view(show_new_dogs))
     btn_happy.configure(command=lambda: run_view(show_gone_dogs))
     btn_stayed.configure(command=lambda: run_view(show_stayed_dogs))
+    btn_changed.configure(command=lambda: run_view(show_changed_dogs))
     btn_stats.configure(command=guarded_stats)
     btn_exit.configure(command=on_close)
     btn_clear.configure(command=lambda: (search_var.set(""), refresh_view()))
@@ -834,6 +956,7 @@ def main():
     root.bind("<Control-n>", lambda e: run_view(show_new_dogs))
     root.bind("<Control-h>", lambda e: run_view(show_gone_dogs))
     root.bind("<Control-g>", lambda e: run_view(show_stayed_dogs))
+    root.bind("<Control-e>", lambda e: run_view(show_changed_dogs))
     root.bind("<F5>", lambda e: do_check())
     root.bind("<Control-t>", lambda e: guarded_stats())
     root.bind("<Control-f>", lambda e: search_entry.focus())
