@@ -18,7 +18,7 @@ class DogRef:
 
 @dataclass(frozen=True)
 class Finding:
-    """kind: description | price | first_photo | baseline | warning | error"""
+    """kind: description | price | first_photo | photo_count | baseline | warning | error"""
     dog: DogRef
     kind: str
     detail: str = ""
@@ -26,8 +26,10 @@ class Finding:
 
 @dataclass
 class RunResult:
-    findings: list = field(default_factory=list)   # real changes
+    findings: list = field(default_factory=list)   # real changes, in input order
     checked: int = 0
     baselined: int = 0                              # dogs seen for the first time
+    cached: int = 0                                 # detail pages answered with 304
+    seconds: float = 0.0                            # wall-clock time of the run
     warnings: list = field(default_factory=list)    # a check could not decide (Finding)
     errors: list = field(default_factory=list)      # a dog could not be checked (Finding)

@@ -1,15 +1,39 @@
-"""HTTP access. One shared session (keep-alive) with sane timeouts."""
+"""HTTP access. One shared session (keep-alive, connection pool) with timeouts."""
+from dataclasses import dataclass
+from typing import Optional
+
 import requests
+from requests.adapters import HTTPAdapter
 
 TIMEOUT = (5, 30)  # (connect, read) seconds
+POOL_SIZE = 16     # enough for the default number of worker threads
+
 SESSION = requests.Session()
 SESSION.headers.update({"User-Agent": "dogwatch/0.1"})
+for _prefix in ("http://", "https://"):
+    SESSION.mount(_prefix, HTTPAdapter(pool_connections=POOL_SIZE, pool_maxsize=POOL_SIZE))
 
 
-def get_html(url):
-    resp = SESSION.get(url, timeout=TIMEOUT)
+@dataclass
+class Fetched:
+    status: int                       # 200, or 304 = "not modified, use your cache"
+    text: str = ""
+    etag: Optional[str] = None
+    last_modified: Optional[str] = None
+
+
+def fetch_page(url, etag=None, last_modified=None):
+    """GET a page; sends validators so an unchanged page costs only a 304."""
+    headers = {}
+    if etag:
+        headers["If-None-Match"] = etag
+    if last_modified:
+        headers["If-Modified-Since"] = last_modified
+    resp = SESSION.get(url, headers=headers, timeout=TIMEOUT)
+    if resp.status_code == 304:
+        return Fetched(304, "", etag, last_modified)
     resp.raise_for_status()
-    return resp.text
+    return Fetched(200, resp.text, resp.headers.get("ETag"), resp.headers.get("Last-Modified"))
 
 
 def head_size(url):
