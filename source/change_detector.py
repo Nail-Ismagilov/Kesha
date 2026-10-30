@@ -204,7 +204,7 @@ def check_dog_changes(dog, dry_run=False, check_images=True):
     separate sections; with check_images=False only the (cheap) text check runs
     and the photo section is left untouched. Only fingerprint.json is ever
     written; the dog's description file and photos are never touched. With
-    dry_run=True nothing at all is written, so the GUI preview stays read-only.
+    dry_run=True nothing at all is written.
     """
     soup = fetch_soup(dog.url)
     try:
@@ -247,34 +247,48 @@ def check_dog_changes(dog, dry_run=False, check_images=True):
     return {}
 
 
-def find_changed_dogs(gender, pets, log=None, check_images=True):
-    """Read-only scan of one category for the GUI preview.
-
-    `pets` is the raw listing already scraped by Doglist. Only dogs that exist
-    locally are checked (new dogs have nothing to compare against). Returns
-    ({dog_name: changes}, number_of_dogs_without_baseline). One failing dog
-    never aborts the scan; it is reported through `log` and skipped.
-    """
+def existing_dogs(gender, pets):
+    """Dogs from the scraped listing `pets` that currently have a local folder
+    ("reist bald" entries excluded). Cheap: only filesystem checks."""
     # Imported lazily to avoid import cycles with manage_folder / dogs.
     from source.dogs import Dog
     from source.dogs_from_url import REIST_BALD
 
-    changed = {}
-    baseline = 0
+    dogs = []
     for pet in pets:
         if pet["spec"] in REIST_BALD:
             continue
         dog = Dog(pet, gender)
-        if not dog.dog_exist():
-            continue
+        if dog.dog_exist():
+            dogs.append(dog)
+    return dogs
+
+
+def check_dogs(dogs, dry_run=True, check_images=True, log=None, on_dog_done=None):
+    """Run check_dog_changes over `dogs`. Returns ({dog_name: changes},
+    number_of_dogs_without_baseline). One failing dog never aborts the run; it
+    is reported through `log` and skipped. `on_dog_done` fires once per dog
+    (also on failure) so callers can drive a progress bar."""
+    changed = {}
+    baseline = 0
+    for dog in dogs:
+        changes = None
         try:
-            changes = check_dog_changes(dog, dry_run=True, check_images=check_images)
+            changes = check_dog_changes(dog, dry_run=dry_run, check_images=check_images)
         except Exception as e:
             if log:
                 log(f"  ⚠ {dog.name}: Änderungsprüfung fehlgeschlagen ({e})\n")
-            continue
-        if "baseline" in changes:
-            baseline += 1
-        elif changes:
-            changed[dog.name] = changes
+        if changes is not None:
+            if "baseline" in changes:
+                baseline += 1
+            elif changes:
+                changed[dog.name] = changes
+        if on_dog_done:
+            on_dog_done()
     return changed, baseline
+
+
+def find_changed_dogs(gender, pets, log=None, check_images=True, dry_run=True):
+    """Convenience wrapper: existing_dogs() + check_dogs() for one category."""
+    return check_dogs(existing_dogs(gender, pets), dry_run=dry_run,
+                      check_images=check_images, log=log)

@@ -4,7 +4,7 @@ from tkinter import messagebox
 from source.doglist import Doglist
 from source.manage_folder import create_new_dogs, delete_dog
 from source.report import create_report
-from source.change_detector import find_changed_dogs
+from source.change_detector import existing_dogs, check_dogs
 from source.global_defines import DOGS_PATH, gender_display
 import source.report as report_module
 import os
@@ -17,10 +17,8 @@ dogsGender = ["Hündinen", "Rüden", "Welpen_Madchen", "Welpen_und_Junghunde", "
 ALL_LABEL = "Alle"
 
 # Fraction of the bar reserved for the upfront scan pass (finding out how
-# many new dogs actually need downloading, and which existing dogs changed),
-# before any real work starts. The scan now also fetches every existing dog's
-# detail page for the change check, hence the larger share.
-SCAN_WEIGHT = 0.15
+# many new dogs actually need downloading), before any real work starts.
+SCAN_WEIGHT = 0.05
 WORK_WEIGHT = 1.0 - SCAN_WEIGHT
 
 # Proportional deletion guard: if a scrape would delete more than this fraction
@@ -29,6 +27,9 @@ WORK_WEIGHT = 1.0 - SCAN_WEIGHT
 # defence against a half-loaded page classifying real dogs as "adopted".
 MAX_DELETE_FRACTION = 0.5
 MIN_FOLDERS_FOR_GUARD = 5
+
+# Report section written by pipeline 2 (background change check).
+CHANGED_SECTION = "GEÄNDERT:"
 
 
 # --------------------------------------------------------------------------- #
@@ -109,7 +110,7 @@ def set_buttons_state(buttons, state):
 
 
 # --------------------------------------------------------------------------- #
-# Scan / apply (no side effects during scan)
+# Pipeline 1: scan / apply (no side effects during scan)
 # --------------------------------------------------------------------------- #
 class GenderPlan:
     """The outcome of scanning one category: what a run *would* create/delete."""
@@ -122,10 +123,6 @@ class GenderPlan:
         self.happy = doglist.happy_dogs() if doglist else []
         self.existing = doglist.existingList if doglist else []
         self.online_count = len(doglist.internetList) if doglist else 0
-        # Existing dogs whose description/photos changed since the last run
-        # ({name: changes}) and how many existing dogs have no fingerprint yet.
-        self.changed = {}
-        self.baseline = 0
         # Proportional guard: block deletions that look like a broken scrape.
         self.delete_blocked = bool(
             doglist
@@ -136,20 +133,13 @@ class GenderPlan:
 
 
 def scan_all(log, progress=None):
-    """Scan every category (listing fetch + local diff + read-only change check
-    of existing dogs). No folders or fingerprints are written. Each category is
-    isolated: one failing scrape doesn't abort the rest, it just yields a plan
-    flagged with an error."""
+    """Scan every category (listing fetch + local diff). No folders are written
+    or deleted. Each category is isolated: one failing scrape doesn't abort the
+    rest, it just yields a plan flagged with an error."""
     plans = []
     for i, gender in enumerate(dogsGender, start=1):
         try:
-            plan = GenderPlan(gender, doglist=Doglist(gender))
-            try:
-                plan.changed, plan.baseline = find_changed_dogs(
-                    gender, plan.doglist.pets, log)
-            except Exception as e:
-                log(f"[WARNUNG] {gender_display(gender)}: Änderungsprüfung fehlgeschlagen ({e})\n")
-            plans.append(plan)
+            plans.append(GenderPlan(gender, doglist=Doglist(gender)))
         except Exception as e:
             log(f"[FEHLER] {gender_display(gender)}: Abruf fehlgeschlagen ({e})\n")
             plans.append(GenderPlan(gender, error=str(e)))
@@ -158,17 +148,10 @@ def scan_all(log, progress=None):
     return plans
 
 
-def count_changes(plans):
-    """Return (n_changed, n_without_baseline) over all healthy plans."""
-    return (sum(len(p.changed) for p in plans if not p.error),
-            sum(p.baseline for p in plans if not p.error))
-
-
 def _new_summary():
     return {
         "created": 0, "failed": 0, "no_images": 0,
         "deleted": 0, "delete_failed": 0, "delete_skipped": 0, "scrape_failed": 0,
-        "changed": 0, "changed_names": [],
     }
 
 
@@ -195,16 +178,12 @@ def apply_all(plans, log, progress):
             continue
 
         log(f"\n{display}:\n")
-        summary["changed"] += len(p.changed)
-        summary["changed_names"].extend(f"{display}: {n}" for n in p.changed)
         # Only overwrite the report when the scrape is trustworthy. A suspected
         # partial scrape keeps its previous (good) report instead of asserting
         # stale/wrong data with a fresh timestamp.
         if not p.delete_blocked:
             create_report(p.doglist, p.gender)
 
-        # create_new_dogs also re-checks existing dogs and saves their new
-        # fingerprints (and writes first-run baselines).
         c, f, ni = create_new_dogs(p.gender, p.doglist.pets, on_dog_done=tick, log=log)
         summary["created"] += c
         summary["failed"] += f
@@ -241,21 +220,18 @@ def summarize_plans(plans):
             lines.append(f"⚠ {d}: Abruf fehlgeschlagen")
             continue
         n_new += len(p.new)
-        changed_txt = f", ✎{len(p.changed)} geändert" if p.changed else ""
         if p.delete_blocked:
             n_blocked += len(p.happy)
             lines.append(f"{d}: +{len(p.new)} neu, {len(p.happy)} abgeholt "
-                         f"⚠ (Löschen gesperrt){changed_txt}")
+                         f"⚠ (Löschen gesperrt)")
         else:
             n_del += len(p.happy)
-            lines.append(f"{d}: +{len(p.new)} neu, −{len(p.happy)} abgeholt{changed_txt}")
+            lines.append(f"{d}: +{len(p.new)} neu, −{len(p.happy)} abgeholt")
     return lines, n_new, n_del, n_blocked, n_error
 
 
 def _summary_line(summary):
     parts = [f"Erstellt: {summary['created']}", f"Gelöscht: {summary['deleted']}"]
-    if summary.get("changed"):
-        parts.append(f"Geändert: {summary['changed']}")
     if summary["failed"]:
         parts.append(f"Fehlgeschlagen: {summary['failed']}")
     if summary["no_images"]:
@@ -270,10 +246,70 @@ def _summary_line(summary):
 
 
 # --------------------------------------------------------------------------- #
+# Pipeline 2: change check of existing dogs (runs in the background)
+# --------------------------------------------------------------------------- #
+def _change_labels(changes):
+    labels = (("description", "Beschreibung"), ("images", "Bilder"))
+    return ", ".join(label for key, label in labels if key in changes)
+
+
+def write_changed_section(gender, changed):
+    """Write/replace the GEÄNDERT section at the end of a category report.
+
+    Format matches the other sections (``    * name``) so the existing report
+    parser and the clickable views work unchanged; the second line only names
+    what changed. Written atomically because the GUI may read the file."""
+    path = os.path.join(report_module.REPORT_PATH, f"{gender}_report.txt")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+    except FileNotFoundError:
+        text = ""
+    idx = text.find("\n" + CHANGED_SECTION)
+    if idx != -1:
+        text = text[:idx]
+    text = (text.rstrip("\n") + "\n") if text else ""
+    text += "\n" + CHANGED_SECTION + "\n"
+    for name, ch in changed.items():
+        text += f"    * {name}\n        → {_change_labels(ch)}\n"
+    os.makedirs(report_module.REPORT_PATH, exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(tmp, path)
+
+
+def run_change_pipeline(plans, on_progress):
+    """Check every existing dog of every healthy category for a changed
+    description / photos, store the new fingerprints and write the GEÄNDERT
+    report section. Blocking; call it from a worker thread.
+
+    on_progress(done, total) is called after each dog. Returns
+    {gender: {dog_name: changes}}."""
+    per_gender = [(p.gender, existing_dogs(p.gender, p.doglist.pets))
+                  for p in plans if not p.error]
+    total = sum(len(dogs) for _, dogs in per_gender)
+    done = [0]
+
+    def tick():
+        done[0] += 1
+        on_progress(done[0], total)
+
+    on_progress(0, total)
+    results = {}
+    for gender, dogs in per_gender:
+        changed, _baseline = check_dogs(
+            dogs, dry_run=False, log=lambda m: print(m, end=""), on_dog_done=tick)
+        write_changed_section(gender, changed)
+        results[gender] = changed
+    return results
+
+
+# --------------------------------------------------------------------------- #
 # Report parsing / display
 # --------------------------------------------------------------------------- #
 def parse_report_section(report_text, section):
-    # section: 'NEUE:' / 'ABGEHOLT:' / 'GEBLIEBEN:' (upper-case)
+    # section: 'NEUE:' / 'ABGEHOLT:' / 'GEBLIEBEN:' / 'GEÄNDERT:' (upper-case)
     lines = report_text.splitlines()
     in_section = False
     dogs = []
@@ -344,8 +380,8 @@ def insert_dog_link(output, emoji, gender, dog):
 
 def show_category(output, status_var, section, title, emoji, tag, clickable,
                   search_term="", gender_filter="ALL"):
-    """Render one report section (NEUE / ABGEHOLT / GEBLIEBEN), optionally
-    filtered to a single category and/or a search term."""
+    """Render one report section (NEUE / ABGEHOLT / GEBLIEBEN / GEÄNDERT),
+    optionally filtered to a single category and/or a search term."""
     _configure_output_tags(output)
     output.configure(state="normal")
     output.delete(1.0, ctk.END)
@@ -412,6 +448,12 @@ def show_stayed_dogs(output, status_var, search_term="", gender_filter="ALL"):
                   search_term, gender_filter)
 
 
+def show_changed_dogs(output, status_var, search_term="", gender_filter="ALL"):
+    # Folders still exist (the dog is still in the shelter) -> clickable.
+    show_category(output, status_var, CHANGED_SECTION, "Geänderte Hunde", "📝", "stayed", True,
+                  search_term, gender_filter)
+
+
 def _render_preview(output, plans):
     """Read-only preview of what a run WOULD change (nothing is written)."""
     _configure_output_tags(output)
@@ -432,15 +474,7 @@ def _render_preview(output, plans):
             for name in p.happy:
                 suffix = " (gesperrt)" if p.delete_blocked else ""
                 output.insert(ctk.END, f"  🗑 {name}{suffix}\n", tag)
-        for name, ch in p.changed.items():
-            what = ", ".join(label for key, label in (("description", "Beschreibung"),
-                                                      ("images", "Bilder")) if key in ch)
-            output.insert(ctk.END, f"  ✎ {name}: {what} geändert\n", "stayed")
-        if p.baseline:
-            output.insert(ctk.END,
-                          f"  ℹ {p.baseline} Hund(e) ohne Referenzstand – "
-                          f"wird beim Aktualisieren angelegt.\n", "none")
-        if not p.new and not p.happy and not p.changed:
+        if not p.new and not p.happy:
             output.insert(ctk.END, "  (keine Änderungen)\n", "none")
         if p.delete_blocked:
             output.insert(ctk.END,
@@ -650,6 +684,8 @@ def main():
     btn_happy.pack(side="top", pady=3, anchor="w")
     btn_stayed = ctk.CTkButton(left_frame, text="🏠 Geblieben", width=SIDEBAR_W)
     btn_stayed.pack(side="top", pady=3, anchor="w")
+    btn_changed = ctk.CTkButton(left_frame, text="📝 Geänderte", width=SIDEBAR_W)
+    btn_changed.pack(side="top", pady=3, anchor="w")
     btn_stats = ctk.CTkButton(left_frame, text="📊 Statistik", width=SIDEBAR_W)
     btn_stats.pack(side="top", pady=3, anchor="w")
 
@@ -678,7 +714,8 @@ def main():
                              fg_color=("gray70", "gray30"), hover_color=("gray60", "gray40"))
     btn_exit.pack(side="bottom", pady=(8, 0), anchor="w")
     shortcuts_text = ("⌨️  F5 Prüfen · Strg+N Neue · Strg+H Abgeholt\n"
-                      "Strg+G Geblieben · Strg+T Statistik · Strg+F Suche · Esc leeren")
+                      "Strg+G Geblieben · Strg+E Geänderte\n"
+                      "Strg+T Statistik · Strg+F Suche · Esc leeren")
     ctk.CTkLabel(left_frame, text=shortcuts_text, font=CTkFont(family="Arial", size=10),
                  justify="left", text_color=CAPTION_COLOR).pack(side="bottom", pady=(10, 4), anchor="w")
 
@@ -695,13 +732,22 @@ def main():
     _configure_output_tags(output)
 
     # --- State & orchestration ------------------------------------------- #
-    state = {"processing": False, "view": None}
-    all_controls = [btn_check, btn_sync, btn_new, btn_happy, btn_stayed, btn_stats,
-                    btn_quoka, btn_kesha, category_menu, btn_clear, btn_exit, search_entry]
+    # processing = pipeline 1 (scan/apply) is running; every control is locked.
+    # bg         = pipeline 2 (change check) is running in the background; only
+    #              the two buttons that could collide with it are locked.
+    state = {"processing": False, "bg": False, "view": None}
+    all_controls = [btn_check, btn_sync, btn_new, btn_happy, btn_stayed, btn_changed,
+                    btn_stats, btn_quoka, btn_kesha, category_menu, btn_clear,
+                    btn_exit, search_entry]
+    bg_locked_controls = [btn_check, btn_sync]
 
     def set_busy(busy):
         state["processing"] = busy
         set_buttons_state(all_controls, ctk.DISABLED if busy else ctk.NORMAL)
+
+    def set_bg(active):
+        state["bg"] = active
+        set_buttons_state(bg_locked_controls, ctk.DISABLED if active else ctk.NORMAL)
 
     def show_progress():
         _set_progress(progress_bar, progress_label, 0)
@@ -731,8 +777,53 @@ def main():
             root.after(0, lambda: on_done(plans))
         threading.Thread(target=worker, daemon=True).start()
 
+    # --- Pipeline 2: background change check ----------------------------- #
+    def on_change_progress(done, total):
+        def update():
+            _set_progress(progress_bar, progress_label, (done / total) if total else 1.0)
+            set_status(status_var,
+                       f"Prüfe Beschreibungen & Bilder bestehender Hunde … {done}/{total}")
+        root.after(0, update)
+
+    def finish_changes(results, error=None):
+        hide_progress()
+        set_bg(False)
+        if error:
+            set_status(status_var, f"Änderungsprüfung abgebrochen: {error}")
+            return
+        n = sum(len(v) for v in results.values())
+        if n:
+            set_status(status_var,
+                       f"Änderungsprüfung fertig: {n} Hund(e) mit geänderter Beschreibung/geänderten Bildern "
+                       f"– siehe „📝 Geänderte“.")
+        else:
+            set_status(status_var, "Änderungsprüfung fertig: keine Änderungen an bestehenden Hunden.")
+        btn_changed.configure(text=f"📝 Geänderte ({n})" if n else "📝 Geänderte")
+        if state["view"] is show_changed_dogs:
+            refresh_view()
+
+    def start_change_pipeline(plans):
+        """Start pipeline 2 on a daemon thread; the GUI stays responsive."""
+        if state["bg"]:
+            return
+        set_bg(True)
+        show_progress()
+        set_status(status_var, "Prüfe Beschreibungen & Bilder bestehender Hunde …")
+
+        def worker():
+            try:
+                results = run_change_pipeline(plans, on_change_progress)
+            except Exception as e:
+                msg = str(e)
+                root.after(0, lambda: finish_changes(None, msg))
+                return
+            root.after(0, lambda: finish_changes(results))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    # --- Pipeline 1 ------------------------------------------------------- #
     def do_check():
-        if state["processing"]:
+        if state["processing"] or state["bg"]:
             return
         set_busy(True)
         clear_output()
@@ -747,10 +838,7 @@ def main():
                 return
             _render_preview(output, plans)
             _, n_new, n_del, n_block, n_err = summarize_plans(plans)
-            n_changed, _n_base = count_changes(plans)
             msg = f"Prüfung: +{n_new} neu, −{n_del} abgeholt"
-            if n_changed:
-                msg += f", ✎{n_changed} geändert"
             if n_block:
                 msg += f", {n_block} gesperrt"
             if n_err:
@@ -759,7 +847,7 @@ def main():
 
         scan_async(after)
 
-    def finish_apply(summary):
+    def finish_apply(summary, plans):
         hide_progress()
         set_busy(False)
         output.configure(state="normal")
@@ -768,11 +856,6 @@ def main():
         if summary is not None:
             output.insert(ctk.END, "Zusammenfassung\n", "header")
             output.insert(ctk.END, _summary_line(summary) + "\n\n", "stats")
-            if summary.get("changed_names"):
-                output.insert(ctk.END, "Geänderte Hunde (Beschreibung/Bilder)\n", "header")
-                for changed_name in summary["changed_names"]:
-                    output.insert(ctk.END, f"  ✎ {changed_name}\n", "stayed")
-                output.insert(ctk.END, "\n")
             set_status(status_var, _summary_line(summary))
         else:
             output.insert(ctk.END, "Mit Fehler beendet.\n\n", "gone")
@@ -782,6 +865,9 @@ def main():
             output.insert(ctk.END, "\n" + ("=" * 60) + "\n\n", "section")
         output.see(1.0)
         output.configure(state="disabled")
+        # Pipeline 1 is done and the UI is unlocked again -> start pipeline 2.
+        if summary is not None:
+            start_change_pipeline(plans)
 
     def run_apply(plans):
         set_busy(True)
@@ -796,12 +882,12 @@ def main():
                 summary = apply_all(plans, log, set_fraction)
             except Exception as e:
                 root.after(0, lambda: _append_output(output, f"\n[FEHLER] {e}\n"))
-            root.after(0, lambda: finish_apply(summary))
+            root.after(0, lambda: finish_apply(summary, plans))
 
         threading.Thread(target=worker, daemon=True).start()
 
     def do_sync():
-        if state["processing"]:
+        if state["processing"] or state["bg"]:
             return
         set_busy(True)
         clear_output()
@@ -815,14 +901,13 @@ def main():
                 set_status(status_var, "Abruf fehlgeschlagen.")
                 return
             lines, n_new, n_del, n_block, n_err = summarize_plans(plans)
-            n_changed, n_base = count_changes(plans)
-            # Changed dogs / missing baselines still need an apply pass so the
-            # new fingerprints get stored, even when nothing is created/deleted.
-            if (n_new == 0 and n_del == 0 and n_block == 0
-                    and n_changed == 0 and n_base == 0):
+            if n_new == 0 and n_del == 0 and n_block == 0:
+                # Nothing to create/delete: pipeline 1 is a no-op, go straight
+                # to pipeline 2 (change check of the existing dogs).
                 set_busy(False)
                 _render_preview(output, plans)
-                set_status(status_var, "Keine Änderungen.")
+                set_status(status_var, "Keine neuen/abgeholten Hunde.")
+                start_change_pipeline(plans)
                 return
             # Deletions require explicit confirmation; pure creations proceed directly.
             if n_del > 0:
@@ -864,6 +949,9 @@ def main():
                 "Bitte warten",
                 "Ein Vorgang läuft noch. Bitte warten, bis er abgeschlossen ist.")
             return
+        # The background change check may still be running: it is a daemon
+        # thread and fingerprints are written atomically, so closing is safe;
+        # unfinished dogs are simply checked again next time.
         root.destroy()
 
     # --- Wire up ---------------------------------------------------------- #
@@ -872,6 +960,7 @@ def main():
     btn_new.configure(command=lambda: run_view(show_new_dogs))
     btn_happy.configure(command=lambda: run_view(show_gone_dogs))
     btn_stayed.configure(command=lambda: run_view(show_stayed_dogs))
+    btn_changed.configure(command=lambda: run_view(show_changed_dogs))
     btn_stats.configure(command=guarded_stats)
     btn_exit.configure(command=on_close)
     btn_clear.configure(command=lambda: (search_var.set(""), refresh_view()))
@@ -882,6 +971,7 @@ def main():
     root.bind("<Control-n>", lambda e: run_view(show_new_dogs))
     root.bind("<Control-h>", lambda e: run_view(show_gone_dogs))
     root.bind("<Control-g>", lambda e: run_view(show_stayed_dogs))
+    root.bind("<Control-e>", lambda e: run_view(show_changed_dogs))
     root.bind("<F5>", lambda e: do_check())
     root.bind("<Control-t>", lambda e: guarded_stats())
     root.bind("<Control-f>", lambda e: search_entry.focus())

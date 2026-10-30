@@ -6,7 +6,6 @@ from source.dogs import Dog
 from source.global_defines import DOGS_PATH
 from source.elements_from_url import urls, get_pets_from_url
 from source.dogs_from_url import REIST_BALD
-from source.change_detector import check_dog_changes
 
 # Recoverable deletion when available: move folders to the OS trash/recycle bin
 # instead of erasing them, so a wrong "adopted" classification can be undone.
@@ -29,10 +28,6 @@ def create_new_dogs(gender, doggies=None, on_dog_done=None, log=None):
     into stdout. `on_dog_done` fires once per attempted new dog (success OR
     failure) so a determinate progress bar still reaches 100%; the returned
     `failed` count — not a stalled bar — is what signals problems.
-
-    Dogs that already exist locally are checked for a changed description or
-    photos (see source/change_detector.py); changes are only logged, existing
-    files are never overwritten.
     """
     emit = log if log is not None else (lambda msg: print(msg, end=""))
     # Reuse the listing already scraped by Doglist when provided, so the page
@@ -47,8 +42,7 @@ def create_new_dogs(gender, doggies=None, on_dog_done=None, log=None):
             continue
         doggy = Dog(dog, gender)
         if doggy.dog_exist():
-            _report_changes(doggy, emit)
-            continue  # already present, not a unit of progress-bar work
+            continue  # already present, near-instant, not a unit of work
         ok, images = doggy.create_dog()
         if not ok:
             failed += 1
@@ -63,19 +57,6 @@ def create_new_dogs(gender, doggies=None, on_dog_done=None, log=None):
         if on_dog_done:
             on_dog_done()
     return created, failed, no_images
-
-def _report_changes(doggy, emit):
-    """Run the change check for an existing dog and log the outcome."""
-    try:
-        changes = check_dog_changes(doggy)
-    except Exception as e:
-        emit(f"  ⚠ {doggy.name}: Änderungsprüfung fehlgeschlagen ({e})\n")
-        return
-    if not changes or "baseline" in changes:
-        return
-    labels = {"description": "Beschreibung", "images": "Bilder"}
-    what = ", ".join(labels[k] for k in ("description", "images") if k in changes)
-    emit(f"  ✎ {doggy.name}: geändert ({what})\n")
 
 def get_path(gender, name):
     path = f"{DOGS_PATH}/{gender}/{name}"
