@@ -249,16 +249,27 @@ def _summary_line(summary):
 # Pipeline 2: change check of existing dogs (runs in the background)
 # --------------------------------------------------------------------------- #
 def _change_labels(changes):
-    labels = (("description", "Beschreibung"), ("images", "Bilder"))
-    return ", ".join(label for key, label in labels if key in changes)
+    """Human-readable reasons, e.g. 'Beschreibung, 1. Foto geändert,
+    Fotozahl 5 online / 4 lokal'."""
+    parts = []
+    if "description" in changes:
+        parts.append("Beschreibung")
+    if changes.get("first_photo") == "changed":
+        parts.append("1. Foto geändert")
+    elif changes.get("first_photo") == "missing":
+        parts.append("1. Foto fehlt lokal")
+    if "photo_count" in changes:
+        site, local = changes["photo_count"]
+        parts.append(f"Fotozahl {site} online / {local} lokal")
+    return ", ".join(parts)
 
 
 def write_changed_section(gender, changed):
     """Write/replace the GEÄNDERT section at the end of a category report.
 
-    Format matches the other sections (``    * name``) so the existing report
-    parser and the clickable views work unchanged; the second line only names
-    what changed. Written atomically because the GUI may read the file."""
+    The ``    * name`` lines match the other sections so the report parser and
+    the clickable views work; the second line holds the reason(s). Written
+    atomically because the GUI may read the file."""
     path = os.path.join(report_module.REPORT_PATH, f"{gender}_report.txt")
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -280,8 +291,8 @@ def write_changed_section(gender, changed):
 
 
 def run_change_pipeline(plans, on_progress):
-    """Check every existing dog of every healthy category for a changed
-    description / photos, store the new fingerprints and write the GEÄNDERT
+    """Check every existing dog of every healthy category (description, first
+    photo, photo count), store new description baselines and write the GEÄNDERT
     report section. Blocking; call it from a worker thread.
 
     on_progress(done, total) is called after each dog. Returns
@@ -309,7 +320,7 @@ def run_change_pipeline(plans, on_progress):
 # Report parsing / display
 # --------------------------------------------------------------------------- #
 def parse_report_section(report_text, section):
-    # section: 'NEUE:' / 'ABGEHOLT:' / 'GEBLIEBEN:' / 'GEÄNDERT:' (upper-case)
+    # section: 'NEUE:' / 'ABGEHOLT:' / 'GEBLIEBEN:' (upper-case)
     lines = report_text.splitlines()
     in_section = False
     dogs = []
@@ -323,6 +334,28 @@ def parse_report_section(report_text, section):
             if line.strip().startswith("*"):
                 dogs.append(line.strip().lstrip("*").strip())
     return dogs
+
+
+def parse_changed_entries(report_text):
+    """Entries of the GEÄNDERT section as [(dog_name, reason), ...]."""
+    lines = report_text.splitlines()
+    in_section = False
+    entries = []
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if s.upper() == CHANGED_SECTION:
+            in_section = True
+            continue
+        if not in_section:
+            continue
+        if s == "" or s.endswith(":"):
+            break
+        if s.startswith("*"):
+            reason = ""
+            if i + 1 < len(lines) and lines[i + 1].strip().startswith("→"):
+                reason = lines[i + 1].strip().lstrip("→").strip()
+            entries.append((s.lstrip("*").strip(), reason))
+    return entries
 
 
 def get_report_timestamp(report_text):
@@ -380,8 +413,8 @@ def insert_dog_link(output, emoji, gender, dog):
 
 def show_category(output, status_var, section, title, emoji, tag, clickable,
                   search_term="", gender_filter="ALL"):
-    """Render one report section (NEUE / ABGEHOLT / GEBLIEBEN / GEÄNDERT),
-    optionally filtered to a single category and/or a search term."""
+    """Render one report section (NEUE / ABGEHOLT / GEBLIEBEN), optionally
+    filtered to a single category and/or a search term."""
     _configure_output_tags(output)
     output.configure(state="normal")
     output.delete(1.0, ctk.END)
@@ -449,9 +482,53 @@ def show_stayed_dogs(output, status_var, search_term="", gender_filter="ALL"):
 
 
 def show_changed_dogs(output, status_var, search_term="", gender_filter="ALL"):
-    # Folders still exist (the dog is still in the shelter) -> clickable.
-    show_category(output, status_var, CHANGED_SECTION, "Geänderte Hunde", "📝", "stayed", True,
-                  search_term, gender_filter)
+    """Dogs with a changed description / first photo / photo count, each with
+    the reason. The dog is still in the shelter, so the name is clickable."""
+    _configure_output_tags(output)
+    output.configure(state="normal")
+    output.delete(1.0, ctk.END)
+
+    genders = dogsGender if gender_filter == "ALL" else [gender_filter]
+    total = 0
+    shown = 0
+    have_report = False
+    for gender in genders:
+        report_str = get_report_string(gender)
+        if not report_str.startswith("Kein Report"):
+            have_report = True
+        timestamp = get_report_timestamp(report_str)
+        entries = parse_changed_entries(report_str)
+        output.insert(ctk.END, f"Geänderte Hunde – {gender_display(gender)}\n", "header")
+        if timestamp:
+            output.insert(ctk.END, f"Stand: {timestamp}\n", "timestamp")
+        total += len(entries)
+        to_show = ([e for e in entries if search_term.lower() in e[0].lower()]
+                   if search_term else entries)
+        shown += len(to_show)
+        if to_show:
+            for name, reason in to_show:
+                insert_dog_link(output, "📝", gender, name)
+                if reason:
+                    output.insert(ctk.END, f"      → {reason}\n", "stayed")
+        else:
+            output.insert(ctk.END, "  (keine Treffer)\n" if entries else "  (keine)\n", "none")
+        output.insert(ctk.END, "\n")
+
+    if not have_report:
+        output.insert(ctk.END,
+                      "\nNoch keine Daten. Führe „🐶 Wooff!“ aus; die Änderungsprüfung läuft "
+                      "danach im Hintergrund.\n", "none")
+    elif search_term:
+        output.insert(ctk.END, f"\n📊 {shown} von {total} Treffer für „{search_term}“\n", "stats")
+    else:
+        output.insert(ctk.END, f"\n📊 Gesamt: {total}\n", "stats")
+
+    output.see(1.0)
+    output.configure(state="disabled")
+    if search_term:
+        set_status(status_var, f"{shown} von {total} für „{search_term}“ (Geänderte Hunde)")
+    else:
+        set_status(status_var, f"{total} × Geänderte Hunde")
 
 
 def _render_preview(output, plans):
@@ -782,7 +859,7 @@ def main():
         def update():
             _set_progress(progress_bar, progress_label, (done / total) if total else 1.0)
             set_status(status_var,
-                       f"Prüfe Beschreibungen & Bilder bestehender Hunde … {done}/{total}")
+                       f"Prüfe Beschreibung, 1. Foto & Fotozahl bestehender Hunde … {done}/{total}")
         root.after(0, update)
 
     def finish_changes(results, error=None):
@@ -794,8 +871,8 @@ def main():
         n = sum(len(v) for v in results.values())
         if n:
             set_status(status_var,
-                       f"Änderungsprüfung fertig: {n} Hund(e) mit geänderter Beschreibung/geänderten Bildern "
-                       f"– siehe „📝 Geänderte“.")
+                       f"Änderungsprüfung fertig: {n} Hund(e) mit Änderungen (Beschreibung, "
+                       f"1. Foto oder Fotozahl) – siehe „📝 Geänderte“.")
         else:
             set_status(status_var, "Änderungsprüfung fertig: keine Änderungen an bestehenden Hunden.")
         btn_changed.configure(text=f"📝 Geänderte ({n})" if n else "📝 Geänderte")
@@ -808,7 +885,7 @@ def main():
             return
         set_bg(True)
         show_progress()
-        set_status(status_var, "Prüfe Beschreibungen & Bilder bestehender Hunde …")
+        set_status(status_var, "Prüfe Beschreibung, 1. Foto & Fotozahl bestehender Hunde …")
 
         def worker():
             try:

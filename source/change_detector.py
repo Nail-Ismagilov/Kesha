@@ -1,19 +1,23 @@
-"""Detect changed descriptions / photos of dogs that already exist locally.
+"""Detect changes of dogs that already exist locally.
 
-A small ``fingerprint.json`` is stored inside each dog's folder. It has two
-independent sections, each with its own baseline and ``checked_at``:
+Three independent checks per dog, all based on the dog's detail page:
 
-* ``description`` - SHA-256 of the normalized scraped text (title/template are
-                     NOT part of it, they contain random words) plus the text
-                     itself so a diff can be produced.
-* ``images``      - SHA-256 + perceptual hash (+ ETag / size) per photo.
-                     Photos are matched by content, so re-encoding,
-                     re-ordering or a new CDN URL for the same picture is not
-                     reported as a change.
+* description  - SHA-256 of the normalized scraped text (title/template are NOT
+                 part of it, they contain random words), stored in a small
+                 ``fingerprint.json`` inside the dog's folder. The first run
+                 silently writes a baseline (no false alarm).
+* first photo  - the first gallery photo on the website is compared with the
+                 first photo saved locally (``<name>1.jpg``). Cheap path: if
+                 the website file has the same size (HEAD request) as the local
+                 file it is treated as unchanged; otherwise the photo is
+                 downloaded and compared by SHA-256, falling back to a
+                 perceptual hash so a re-encoded copy of the same picture is
+                 not reported.
+* photo count  - number of gallery photos on the website vs. number of image
+                 files in the dog's folder.
 
-A missing section only rebuilds that section. The first run for a section
-silently writes a baseline (no false alarms). Files written by the first
-version (flat layout) are upgraded transparently.
+No per-photo fingerprints are stored; photos are compared against the files
+that are already in the dog's folder.
 """
 import difflib
 import hashlib
@@ -30,9 +34,10 @@ from PIL import Image
 from source.elements_from_url import SESSION, DEFAULT_TIMEOUT, fetch_soup
 
 FP_FILE = "fingerprint.json"
-FP_VERSION = 2
+FP_VERSION = 3
 PHASH_THRESHOLD = 8  # max Hamming distance for "same picture"
 SPLIT_MARKER = "wird nach positiver Vorkontrolle "
+PHOTO_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
 
 
 def _now():
@@ -48,28 +53,33 @@ def text_hash(text):
     return hashlib.sha256(_norm(text).encode("utf-8")).hexdigest()
 
 
+def count_local_photos(dog_path):
+    """Number of image files in a dog's folder."""
+    try:
+        return sum(1 for n in os.listdir(dog_path) if n.lower().endswith(PHOTO_EXTS))
+    except OSError:
+        return 0
+
+
 # --------------------------------------------------------------------------- #
-# Storage
+# Description fingerprint storage
 # --------------------------------------------------------------------------- #
 def _fp_path(dog_path):
     return os.path.join(dog_path, FP_FILE)
 
 
 def _upgrade(fp):
-    """Return a v2 dict {'version', 'description', 'images'}; a section is None
-    when it has no baseline yet. Accepts None and the old flat v1 layout."""
+    """Return {'version', 'description'}; description is None without baseline.
+    Accepts None, the flat v1 layout and v2 files (their image data is dropped)."""
     if not fp:
-        return {"version": FP_VERSION, "description": None, "images": None}
-    if fp.get("version") == FP_VERSION:
-        return {"version": FP_VERSION,
-                "description": fp.get("description"),
-                "images": fp.get("images")}
+        return {"version": FP_VERSION, "description": None}
+    if fp.get("version") in (2, FP_VERSION):
+        return {"version": FP_VERSION, "description": fp.get("description")}
     text = fp.get("description") or ""
     return {
         "version": FP_VERSION,
         "description": {"text": text,
                         "hash": fp.get("description_hash") or text_hash(text)},
-        "images": {"items": fp.get("images") or []},
     }
 
 
@@ -90,78 +100,8 @@ def save_fp(dog_path, fp):
     os.replace(tmp, path)
 
 
-# --------------------------------------------------------------------------- #
-# Photos
-# --------------------------------------------------------------------------- #
-def _image_entry(url, data, etag, size):
-    img = Image.open(io.BytesIO(data)).convert("RGB")
-    return {
-        "url": url,
-        "sha256": hashlib.sha256(data).hexdigest(),
-        "phash": str(imagehash.phash(img)),
-        "etag": etag,
-        "size": size,
-    }
-
-
-def _head_info(url):
-    try:
-        r = SESSION.head(url, allow_redirects=True, timeout=DEFAULT_TIMEOUT)
-        return r.headers.get("ETag"), r.headers.get("Content-Length")
-    except Exception:
-        return None, None
-
-
-def _fingerprint_images(urls, old_images):
-    """Fingerprint every gallery image, re-downloading only when the URL is new
-    or ETag / Content-Length differ from the stored fingerprint."""
-    old_by_url = {i["url"]: i for i in old_images}
-    result = []
-    for url in urls:
-        etag, size = _head_info(url)
-        old = old_by_url.get(url)
-        if old and ((etag and etag == old.get("etag"))
-                    or (not etag and size and size == old.get("size"))):
-            result.append(old)
-            continue
-        try:
-            resp = SESSION.get(url, timeout=DEFAULT_TIMEOUT)
-            resp.raise_for_status()
-            if not resp.headers.get("Content-Type", "").startswith("image/"):
-                raise ValueError("not an image response")
-            result.append(_image_entry(url, resp.content, etag, size))
-        except Exception as e:
-            print(f"[WARN] Could not fingerprint image {url}: {e}")
-            if old:  # keep the previous state rather than report a bogus change
-                result.append(old)
-    return result
-
-
-def _same_image(a, b):
-    if a["sha256"] == b["sha256"]:
-        return True
-    return (imagehash.hex_to_hash(a["phash"])
-            - imagehash.hex_to_hash(b["phash"])) <= PHASH_THRESHOLD
-
-
-def _diff_images(old_items, new_items):
-    """Return (added_urls, removed_urls), matching photos by content."""
-    left = list(old_items)
-    added = []
-    for n in new_items:
-        hit = next((o for o in left if _same_image(o, n)), None)
-        if hit is not None:
-            left.remove(hit)
-        else:
-            added.append(n["url"])
-    return added, [o["url"] for o in left]
-
-
-# --------------------------------------------------------------------------- #
-# Independent section checks: (new_section, status, change)
-# status is 'baseline' | 'same' | 'changed'
-# --------------------------------------------------------------------------- #
 def _check_description(old, description):
+    """Return (new_section, status, diff); status is baseline | same | changed."""
     new = {"text": description, "hash": text_hash(description), "checked_at": _now()}
     if old is None:
         return new, "baseline", None
@@ -173,38 +113,68 @@ def _check_description(old, description):
     return new, "changed", diff
 
 
-def _check_images(old, urls):
-    old_items = old["items"] if old else []
-    if old_items and not urls:
-        # Gallery vanished entirely: more likely a page glitch than a real
-        # change. Keep the old photo state.
-        return old, "same", None
-    new = {"items": _fingerprint_images(urls, old_items), "checked_at": _now()}
-    if old is None:
-        return new, "baseline", None
-    added, removed = _diff_images(old_items, new["items"])
-    if added or removed:
-        return new, "changed", {"added": added, "removed": removed}
-    return old, "same", None
+# --------------------------------------------------------------------------- #
+# First photo
+# --------------------------------------------------------------------------- #
+def _head_size(url):
+    try:
+        r = SESSION.head(url, allow_redirects=True, timeout=DEFAULT_TIMEOUT)
+        return r.headers.get("Content-Length")
+    except Exception:
+        return None
+
+
+def _same_picture(local_bytes, site_bytes):
+    if hashlib.sha256(local_bytes).digest() == hashlib.sha256(site_bytes).digest():
+        return True
+    try:
+        a = imagehash.phash(Image.open(io.BytesIO(local_bytes)).convert("RGB"))
+        b = imagehash.phash(Image.open(io.BytesIO(site_bytes)).convert("RGB"))
+        return (a - b) <= PHASH_THRESHOLD
+    except Exception:
+        return False
+
+
+def _first_photo_status(dog, urls, path):
+    """None (unchanged / unknown), 'changed' or 'missing' (no local first photo)."""
+    if not urls:
+        return None
+    local_first = os.path.join(path, f"{dog.name}1.jpg")
+    if not os.path.isfile(local_first):
+        return "missing"
+    url = urls[0]
+    size = _head_size(url)
+    if size is not None and str(size) == str(os.path.getsize(local_first)):
+        return None  # same size -> assume unchanged, no download
+    try:
+        resp = SESSION.get(url, timeout=DEFAULT_TIMEOUT)
+        resp.raise_for_status()
+        if not resp.headers.get("Content-Type", "").startswith("image/"):
+            raise ValueError("not an image response")
+        site_bytes = resp.content
+    except Exception as e:
+        print(f"[WARN] Could not fetch first photo of {dog.name}: {e}")
+        return None  # unknown -> do not raise a false alarm
+    with open(local_first, "rb") as f:
+        local_bytes = f.read()
+    return None if _same_picture(local_bytes, site_bytes) else "changed"
 
 
 # --------------------------------------------------------------------------- #
 # Public API
 # --------------------------------------------------------------------------- #
-def check_dog_changes(dog, dry_run=False, check_images=True):
-    """Check one already-existing Dog against its stored fingerprint.
+def check_dog_changes(dog, dry_run=False):
+    """Check one already-existing Dog.
 
-    Returns:
-      {}                       nothing changed
-      {"baseline": True}       nothing changed, but a section had no baseline yet
-      {"description": diff,    real changes; keys are present per changed part
-       "images": {"added": [...], "removed": [...]}}
+    Returns a dict; the keys that are present say what is different:
+      "description": unified diff of the old/new description
+      "first_photo": "changed" | "missing"
+      "photo_count": (photos on the website, image files locally)
+    If nothing is different it returns {} - or {"baseline": True} when only the
+    description baseline had to be created.
 
-    The description and the photos are compared independently and stored in
-    separate sections; with check_images=False only the (cheap) text check runs
-    and the photo section is left untouched. Only fingerprint.json is ever
-    written; the dog's description file and photos are never touched. With
-    dry_run=True nothing at all is written.
+    Only fingerprint.json (description) is ever written; the dog's description
+    file and photos are never touched. With dry_run=True nothing is written.
     """
     soup = fetch_soup(dog.url)
     try:
@@ -223,28 +193,26 @@ def check_dog_changes(dog, dry_run=False, check_images=True):
         soup.decompose()
 
     path = dog.get_path()
-    fp = load_fp(path)
-
-    desc_sec, d_status, d_change = _check_description(fp["description"], description)
-    if check_images:
-        img_sec, i_status, i_change = _check_images(fp["images"], urls)
-    else:
-        img_sec, i_status, i_change = fp["images"], "skipped", None
-
-    dirty = d_status in ("baseline", "changed") or i_status in ("baseline", "changed")
-    if dirty and not dry_run:
-        save_fp(path, {"version": FP_VERSION, "description": desc_sec, "images": img_sec})
-
     changes = {}
+
+    fp = load_fp(path)
+    desc_sec, d_status, d_change = _check_description(fp["description"], description)
+    if d_status in ("baseline", "changed") and not dry_run:
+        save_fp(path, {"version": FP_VERSION, "description": desc_sec})
     if d_status == "changed":
         changes["description"] = d_change
-    if i_status == "changed":
-        changes["images"] = i_change
+
+    first = _first_photo_status(dog, urls, path)
+    if first:
+        changes["first_photo"] = first
+
+    local_count = count_local_photos(path)
+    if len(urls) != local_count:
+        changes["photo_count"] = (len(urls), local_count)
+
     if changes:
         return changes
-    if "baseline" in (d_status, i_status):
-        return {"baseline": True}
-    return {}
+    return {"baseline": True} if d_status == "baseline" else {}
 
 
 def existing_dogs(gender, pets):
@@ -264,7 +232,7 @@ def existing_dogs(gender, pets):
     return dogs
 
 
-def check_dogs(dogs, dry_run=True, check_images=True, log=None, on_dog_done=None):
+def check_dogs(dogs, dry_run=True, log=None, on_dog_done=None):
     """Run check_dog_changes over `dogs`. Returns ({dog_name: changes},
     number_of_dogs_without_baseline). One failing dog never aborts the run; it
     is reported through `log` and skipped. `on_dog_done` fires once per dog
@@ -274,7 +242,7 @@ def check_dogs(dogs, dry_run=True, check_images=True, log=None, on_dog_done=None
     for dog in dogs:
         changes = None
         try:
-            changes = check_dog_changes(dog, dry_run=dry_run, check_images=check_images)
+            changes = check_dog_changes(dog, dry_run=dry_run)
         except Exception as e:
             if log:
                 log(f"  ⚠ {dog.name}: Änderungsprüfung fehlgeschlagen ({e})\n")
@@ -286,9 +254,3 @@ def check_dogs(dogs, dry_run=True, check_images=True, log=None, on_dog_done=None
         if on_dog_done:
             on_dog_done()
     return changed, baseline
-
-
-def find_changed_dogs(gender, pets, log=None, check_images=True, dry_run=True):
-    """Convenience wrapper: existing_dogs() + check_dogs() for one category."""
-    return check_dogs(existing_dogs(gender, pets), dry_run=dry_run,
-                      check_images=check_images, log=log)
